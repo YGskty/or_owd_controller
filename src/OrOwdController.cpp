@@ -13,20 +13,17 @@ OrOwdController::OrOwdController(OpenRAVE::EnvironmentBasePtr penv, std::istream
    this->is_initialized = false;
    this->__description = "OrOwdController: controller for an OWD robot.";
    sinput >> this->owdns;
-   printf("Constructor got owdns: |%s|\n", this->owdns.c_str());
 }
 
 OrOwdController::~OrOwdController()
 {
    if (this->np) delete this->np;
-   printf("OrOwdController Destructed!\n");
 }
 
 bool OrOwdController::Init(OpenRAVE::RobotBasePtr r, const std::vector<int> &dofs, int nControlTransformation)
 {
    std::map<std::string, std::string> remappings;
    
-   printf("OrOwdController Init called!\n");
    this->r = r;
    this->dofs = dofs;
    
@@ -34,9 +31,7 @@ bool OrOwdController::Init(OpenRAVE::RobotBasePtr r, const std::vector<int> &dof
     * note, since we're an openrave plugin among potentially several others
     * with their own "ROS nodes", only the first init will actually succeed ... */
    try {
-      printf("initializing node ...\n");
       ros::init(remappings, "orowdcontroller", 0);
-      printf("done!\n");
    }
    catch (ros::InvalidNodeNameException ex) {
       RAVELOG_ERROR("Could not initialize ROS!\n");
@@ -44,12 +39,9 @@ bool OrOwdController::Init(OpenRAVE::RobotBasePtr r, const std::vector<int> &dof
    }
    
    /* get a nodehandle */
-   printf("getting nodehandle ...\n");
    this->np = new ros::NodeHandle();
-   printf("got nodehandle %p!\n", this->np);
    
    /* set up some sweet subscribers */
-   printf("waiting for first message ...\n");
    owd_msgs::WAMStateConstPtr m = ros::topic::waitForMessage<owd_msgs::WAMState>(this->owdns + "/wamstate");
    if (!m)
    {
@@ -111,7 +103,6 @@ void OrOwdController::SimulationStep(OpenRAVE::dReal dt)
    
    assert(this->dofs.size() == this->wamstate_last.positions.size());
    
-   printf("updating robot from %s ...\n", this->owdns.c_str());
    this->r->GetDOFValues(dofvals);
    for (unsigned int i=0; i<this->dofs.size(); i++)
    {
