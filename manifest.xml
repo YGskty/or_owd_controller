@@ -1,0 +1,12 @@
+<package>
+  <description brief="or_owdcontroller">
+     or_owdcontroller
+  </description>
+  <depend package="openrave"/>
+  <depend package="owd_msgs"/>
+  <export>
+    <openrave plugins="${prefix}/lib"/>
+  </export>
+</package>
+
+
