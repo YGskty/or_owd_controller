@@ -1,13 +1,11 @@
 <package>
-  <description brief="or_owdcontroller">
-     or_owdcontroller
-  </description>
-  <author>Michael Koval</author>
-  <depend package="openrave"/>
-  <depend package="owd_msgs"/>
-  <export>
-    <openrave plugins="${prefix}/lib"/>
-  </export>
+    <description brief="OpenRAVE controller for interfacing with OWD.">
+        OpenRAVE controller for interfacing with OWD.
+    </description>
+    <author>Michael Koval</author>
+    <depend package="openrave"/>
+    <depend package="owd_msgs"/>
+    <export>
+        <openrave plugins="${prefix}/lib"/>
+    </export>
 </package>
-
-
