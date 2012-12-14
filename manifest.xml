@@ -2,6 +2,7 @@
   <description brief="or_owdcontroller">
      or_owdcontroller
   </description>
+  <author>Michael Koval</author>
   <depend package="openrave"/>
   <depend package="owd_msgs"/>
   <export>
