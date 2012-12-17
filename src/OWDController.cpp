@@ -10,9 +10,10 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
 {
     BOOST_ASSERT(robot && ctrl_transform == 0);
 
-    ros::NodeHandle nh_owd(ns);
+    ros::NodeHandle nh_owd(owd_ns_);
     dof_indices_ = dof_indices;
     sub_wamstate_ = nh_owd.subscribe("wamstate", 1, &OWDController::wamstateCallback, this);
+    return true;
 }
 
 void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
@@ -27,12 +28,12 @@ void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
 
     for (size_t owd_index = 0; owd_index < dof_indices_.size(); ++owd_index) {
         size_t const dof_index = dof_indices_[owd_index];
-        BOOST_ASSERT(0 <= dof_index && dof_index < dof_values.size());
-        dof_values[dof_index] = current_wamstate_[owd_index];
+        BOOST_ASSERT(dof_index < dof_values.size());
+        dof_values[dof_index] = current_wamstate_->positions[owd_index];
     }
 }
 
-void OWDController::Reset(int options = 0)
+void OWDController::Reset(int options)
 {
     current_wamstate_ = owd_msgs::WAMState::ConstPtr();
     // TODO: What else do we need to reinitialize?
@@ -45,7 +46,7 @@ bool OWDController::IsDone(void)
                               &&  current_wamstate_->state != owd_msgs::WAMState::state_traj_paused);
 }
 
-OpenRAVE::RobotBasePt OWDController::GetRobot(void) const
+OpenRAVE::RobotBasePtr OWDController::GetRobot(void) const
 {
     return robot_;
 }
@@ -69,12 +70,12 @@ void OWDController::GetVelocity(std::vector<OpenRAVE::dReal> &velocities) const
             velocities[i] = static_cast<OpenRAVE::dReal>(current_wamstate_->velocities[i]);
         }
     } else {
-        velocities.assign(0);
+        velocities.assign(dof_indices_.size(), 0);
     }
 }
 
 bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
-                               OpenRAVE::TransformConstPtr transform = OpenRAVE::TransformConstPtr())
+                               OpenRAVE::TransformConstPtr transform)
 {
     throw OpenRAVE::openrave_exception("SetDesired is not implemented.", OpenRAVE::ORE_NotImplemented);
 }
@@ -87,7 +88,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wamstate)
 {
     // Verify that we received the WAMState messages in sequential order.
-    if (current_wamstate_ && newwamstate->header.stamp < current_wamstate_->header.stamp) {
+    if (current_wamstate_ && new_wamstate->header.stamp < current_wamstate_->header.stamp) {
         RAVELOG_WARN("Received WAMState message with an out-of-order timestamp.\n");
         current_wamstate_ = owd_msgs::WAMState::ConstPtr();
         return;
@@ -96,7 +97,7 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
     else if (new_wamstate->positions.size() != dof_indices_.size()) {
         RAVELOG_WARN("Received WAMState message with %d DOFs; expected %d.\n",
             static_cast<int>(new_wamstate->positions.size()),
-            static_cast<int>(dof_indices_.size());
+            static_cast<int>(dof_indices_.size())
         );
         return;
     }

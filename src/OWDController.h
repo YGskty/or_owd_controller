@@ -2,9 +2,12 @@
 #define OWDCONTROLLER_H_
 
 #include <ros/ros.h>
-#include <owd_msgs/WAMState.h> #include <openrave/controller.h>
+#include <owd_msgs/WAMState.h>
+#include <openrave/openrave.h>
+//#include <openrave/controller.h>
 
-class OWDController : public OpenRAVE::ControllerBase { public:
+class OWDController : public OpenRAVE::ControllerBase {
+public:
     OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const &ns);
 
     virtual bool Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform);
@@ -12,7 +15,7 @@ class OWDController : public OpenRAVE::ControllerBase { public:
     virtual void Reset(int options = 0);
     virtual bool IsDone(void);
 
-    virtual OpenRAVE::RobotBasePt GetRobot(void) const;
+    virtual OpenRAVE::RobotBasePtr GetRobot(void) const;
     virtual std::vector<int> const &GetControlDOFIndices(void) const;
     virtual int IsControlTransformation(void) const;
 
