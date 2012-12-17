@@ -15,12 +15,20 @@ OpenRAVE::InterfaceBasePtr CreateInterfaceValidated(OpenRAVE::InterfaceType type
 {
 
     if (type == OpenRAVE::PT_Controller && interface_name == "owdcontroller") {
-        std::string owd_namespace;
-        sinput >> owd_namespace;
+        std::string node_name, owd_namespace;
+        sinput >> node_name >> owd_namespace;
 
-        if (!sinput.good()) {
-            RAVELOG_ERROR("OWDController is missing the required namespace parameter.\n");
+        if (sinput.fail()) {
+            RAVELOG_ERROR("OWDController is missing the node_name and/or owd_namespace parameter(s).\n");
             return OpenRAVE::InterfaceBasePtr();
+        }
+
+        if (!ros::isInitialized()) {
+            int argc = 0;
+            ros::init(argc, NULL, node_name, ros::init_options::AnonymousName);
+            RAVELOG_INFO("Starting ROS node '%s'.\n", node_name.c_str());
+        } else {
+            RAVELOG_INFO("Using existing ROS node '%s'\n", ros::this_node::getName().c_str());
         }
 
         return boost::make_shared<OWDController>(env, owd_namespace);

@@ -9,8 +9,11 @@ OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const
 bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
 {
     BOOST_ASSERT(robot && ctrl_transform == 0);
+    robot_ = robot;
 
-    ros::NodeHandle nh_owd(owd_ns_);
+    nh_.setCallbackQueue(&queue_);
+    ros::NodeHandle nh_owd(nh_, owd_ns_);
+
     dof_indices_ = dof_indices;
     sub_wamstate_ = nh_owd.subscribe("wamstate", 1, &OWDController::wamstateCallback, this);
     return true;
@@ -18,18 +21,21 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
 
 void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
 {
-    if (!current_wamstate_) {
-        return;
-    }
+    queue_.callAvailable();
+
 
     // Update the DOF values from the most recent WAMState message.
-    std::vector<OpenRAVE::dReal> dof_values;
-    robot_->GetDOFValues(dof_values);
+    if (current_wamstate_) {
+        std::vector<OpenRAVE::dReal> dof_values;
+        robot_->GetDOFValues(dof_values);
 
-    for (size_t owd_index = 0; owd_index < dof_indices_.size(); ++owd_index) {
-        size_t const dof_index = dof_indices_[owd_index];
-        BOOST_ASSERT(dof_index < dof_values.size());
-        dof_values[dof_index] = current_wamstate_->positions[owd_index];
+        for (size_t owd_index = 0; owd_index < dof_indices_.size(); ++owd_index) {
+            size_t const dof_index = dof_indices_[owd_index];
+            BOOST_ASSERT(dof_index < dof_values.size());
+            dof_values[dof_index] = current_wamstate_->positions[owd_index];
+        }
+
+        robot_->SetDOFValues(dof_values);
     }
 }
 

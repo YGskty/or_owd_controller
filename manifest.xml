@@ -3,6 +3,8 @@
         OpenRAVE controller for interfacing with OWD.
     </description>
     <author>Michael Koval</author>
+    <depend package="roscpp"/>
+    <depend package="rosconsole"/>
     <depend package="openrave"/>
     <depend package="owd_msgs"/>
     <export>

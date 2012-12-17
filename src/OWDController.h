@@ -2,9 +2,9 @@
 #define OWDCONTROLLER_H_
 
 #include <ros/ros.h>
+#include <ros/callback_queue.h>
 #include <owd_msgs/WAMState.h>
 #include <openrave/openrave.h>
-//#include <openrave/controller.h>
 
 class OWDController : public OpenRAVE::ControllerBase {
 public:
@@ -27,6 +27,8 @@ public:
 
 private:
     std::string owd_ns_;
+    ros::NodeHandle nh_;
+    ros::CallbackQueue queue_;
     OpenRAVE::RobotBasePtr robot_;
     std::vector<int> dof_indices_;
     ros::Subscriber sub_wamstate_;
