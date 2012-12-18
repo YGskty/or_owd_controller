@@ -16,6 +16,8 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
 
     dof_indices_ = dof_indices;
     sub_wamstate_ = nh_owd.subscribe("wamstate", 1, &OWDController::wamstateCallback, this);
+    srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
+    srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
     return true;
 }
 
@@ -42,7 +44,23 @@ void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
 void OWDController::Reset(int options)
 {
     current_wamstate_ = owd_msgs::WAMState::ConstPtr();
-    // TODO: What else do we need to reinitialize?
+
+    // Attempt to cancel the current trajectory.
+    if (!traj_id_.empty()) {
+        owd_msgs::DeleteTrajectory msg_delete;
+        msg_delete.request.ids.push_back(traj_id_);
+
+        bool const success = srv_delete_traj_.call(msg_delete) && msg_delete.response.ok;
+        if (!success && !msg_delete.response.reason.empty()) {
+            RAVELOG_ERROR("Deleting the trajectory '%s' from OWD failed: %s\n",
+                traj_id_.c_str(), msg_delete.response.reason.c_str()
+            );
+        } else if (!success) {
+            RAVELOG_ERROR("Deleting the trajectory '%s' from OWD failed with an unknown error.\n",
+                traj_id_.c_str()
+            );
+        }
+    }
 }
 
 bool OWDController::IsDone(void)
@@ -88,7 +106,56 @@ bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
-    throw OpenRAVE::openrave_exception("SetPath is not implemented.", OpenRAVE::ORE_NotImplemented);
+    size_t const num_waypoints = traj->GetNumWaypoints();
+    size_t const num_dofs = dof_indices_.size();
+    OpenRAVE::ConfigurationSpecification const config_spec = traj->GetConfigurationSpecification();
+
+    owd_msgs::AddTrajectory::Request request;
+    request.traj.positions.resize(num_waypoints);
+    request.traj.blend_radius.resize(num_waypoints);
+    // FIXME: Which options should I pass here?
+    request.traj.options = owd_msgs::JointTraj::opt_CancelOnStall;
+    request.traj.id = "";
+
+    for (size_t i = 0; i < num_waypoints; ++i) {
+        std::vector<OpenRAVE::dReal> full_waypoint;
+        traj->GetWaypoint(i, full_waypoint, config_spec);
+
+        // Extract only the joint values from the waypoint. The full waypoint
+        // may include extra fields that we don't care about (e.g. timestamps,
+        // joint velocities).
+        std::vector<OpenRAVE::dReal> waypoint(num_dofs);
+        if (!config_spec.ExtractJointValues(waypoint.begin(), full_waypoint.begin(), robot_, dof_indices_)) {
+            RAVELOG_ERROR("Unable to extract joint values from waypoint.\n");
+            return false;
+        } else if (waypoint.size() != num_dofs) {
+            RAVELOG_ERROR("Unable to extract joint values from waypoint; expected %d, got %d.\n",
+                static_cast<int>(num_dofs), static_cast<int>(waypoint.size())
+            );
+            return false;
+        }
+
+        for (size_t j = 0; j < waypoint.size(); ++j) {
+            // FIXME: Implement trajectory blending.
+            request.traj.positions[i].j.resize(num_dofs);
+            request.traj.positions[i].j[j] = waypoint[i];
+            request.traj.blend_radius[i] = 0;
+        }
+    }
+
+    // Add the trajectory to OWD.
+    owd_msgs::AddTrajectory::Response response;
+    bool const success = srv_add_traj_.call(request, response) && response.ok;
+    if (success) {
+        traj_id_ = response.id;
+    } else if (!response.reason.empty()) {
+        RAVELOG_ERROR("Adding the trajectory to OWD failed with error: %s\n", response.reason.c_str());
+        return false;
+    } else {
+        RAVELOG_ERROR("Adding the trajectory to OWD failed with an unknown error.\n");
+        return false;
+    }
+    return true;
 }
 
 void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wamstate)

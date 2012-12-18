@@ -3,6 +3,8 @@
 
 #include <ros/ros.h>
 #include <ros/callback_queue.h>
+#include <owd_msgs/AddTrajectory.h>
+#include <owd_msgs/DeleteTrajectory.h>
 #include <owd_msgs/WAMState.h>
 #include <openrave/openrave.h>
 
@@ -27,11 +29,14 @@ public:
 
 private:
     std::string owd_ns_;
+    std::string traj_id_;
     ros::NodeHandle nh_;
     ros::CallbackQueue queue_;
+    ros::Subscriber sub_wamstate_;
+    ros::ServiceClient srv_add_traj_;
+    ros::ServiceClient srv_delete_traj_;
     OpenRAVE::RobotBasePtr robot_;
     std::vector<int> dof_indices_;
-    ros::Subscriber sub_wamstate_;
     owd_msgs::WAMState::ConstPtr current_wamstate_;
 
     void wamstateCallback(owd_msgs::WAMState::ConstPtr const &wamstate);
