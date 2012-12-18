@@ -192,8 +192,10 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 
 bool OWDController::servoCommand(std::ostream &out, std::istream &in)
 {
-    // OWD will silently fail if we send a servo command while in grav-comp.
-    if (current_wamstate_ && current_wamstate_->state != owd_msgs::WAMState::state_fixed) {
+    // OWD will silently fail if we send a servo command while in grav-comp. We
+    // can't simply check if the arm is holding position because it will cause
+    // problems if we send the commands too quickly.
+    if (current_wamstate_ && current_wamstate_->state == owd_msgs::WAMState::state_free) {
         RAVELOG_ERROR("Servoing is only possible when the arm is holding position.\n");
         return false;
     }
