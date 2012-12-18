@@ -4,6 +4,10 @@ OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const
     : OpenRAVE::ControllerBase(env)
     , owd_ns_(ns)
 {
+    RegisterCommand("Servo", boost::bind(&OWDController::servoCommand, this, _1, _2),
+                    "Servo with an instantaneous joint velocity.");
+    RegisterCommand("SetStiffness", boost::bind(&OWDController::setStiffnessCommand, this, _1, _2),
+                    "Change the stiffness of the joints; 0 is gravity compensation and 1 is stiff.");
 }
 
 bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
@@ -16,6 +20,7 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
 
     dof_indices_ = dof_indices;
     sub_wamstate_ = nh_owd.subscribe("wamstate", 1, &OWDController::wamstateCallback, this);
+    pub_servo_ = nh_owd.advertise<owd_msgs::Servo>("wamservo", 1);
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
     srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
     return true;
@@ -159,6 +164,38 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
     return true;
 }
 
+bool OWDController::servoCommand(std::ostream &out, std::istream &in)
+{
+    // OWD will silently fail if we send a servo command while in grav-comp.
+    if (current_wamstate_ && current_wamstate_->state != owd_msgs::WAMState::state_fixed) {
+        RAVELOG_ERROR("Servoing is only possible when the arm is holding position.\n");
+        return false;
+    }
+
+    size_t const num_dofs = dof_indices_.size();
+    owd_msgs::Servo msg_servo;
+    msg_servo.joint.resize(num_dofs);
+    msg_servo.velocity.resize(num_dofs);
+
+    for (size_t i = 0; i < num_dofs; ++i) {
+        msg_servo.joint[i] = i;
+        in >> msg_servo.velocity[i];
+    }
+
+    if (in.fail()) {
+        RAVELOG_ERROR("Servo command received missing or malformed joint velocities.\n");
+        return false;
+    }
+
+    pub_servo_.publish(msg_servo);
+    return true;
+}
+
+bool OWDController::setStiffnessCommand(std::ostream &out, std::istream &in)
+{
+    throw OpenRAVE::openrave_exception("setStiffnessCommand is not implemented");
+}
+
 void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wamstate)
 {
     // Verify that we received the WAMState messages in sequential order.
@@ -177,3 +214,4 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
     }
     current_wamstate_ = new_wamstate;
 }
+
