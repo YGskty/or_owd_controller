@@ -111,11 +111,14 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
     OpenRAVE::ConfigurationSpecification const config_spec = traj->GetConfigurationSpecification();
 
     owd_msgs::AddTrajectory::Request request;
-    request.traj.positions.resize(num_waypoints);
-    request.traj.blend_radius.resize(num_waypoints);
     // FIXME: Which options should I pass here?
     request.traj.options = owd_msgs::JointTraj::opt_CancelOnStall;
     request.traj.id = "";
+    request.traj.positions.resize(num_waypoints);
+    request.traj.blend_radius.resize(num_waypoints);
+
+    // FIXME: Implement trajectory blending.
+    request.traj.blend_radius.assign(num_waypoints, 0);
 
     for (size_t i = 0; i < num_waypoints; ++i) {
         std::vector<OpenRAVE::dReal> full_waypoint;
@@ -135,11 +138,9 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
             return false;
         }
 
-        for (size_t j = 0; j < waypoint.size(); ++j) {
-            // FIXME: Implement trajectory blending.
+        for (size_t j = 0; j < num_dofs; ++j) {
             request.traj.positions[i].j.resize(num_dofs);
-            request.traj.positions[i].j[j] = waypoint[i];
-            request.traj.blend_radius[i] = 0;
+            request.traj.positions[i].j[j] = waypoint[j];
         }
     }
 
