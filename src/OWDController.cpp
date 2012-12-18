@@ -23,6 +23,7 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     pub_servo_ = nh_owd.advertise<owd_msgs::Servo>("wamservo", 1);
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
     srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
+    srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
     return true;
 }
 
@@ -178,7 +179,7 @@ bool OWDController::servoCommand(std::ostream &out, std::istream &in)
     msg_servo.velocity.resize(num_dofs);
 
     for (size_t i = 0; i < num_dofs; ++i) {
-        msg_servo.joint[i] = i;
+        msg_servo.joint[i] = i + 1;
         in >> msg_servo.velocity[i];
     }
 
@@ -187,13 +188,39 @@ bool OWDController::servoCommand(std::ostream &out, std::istream &in)
         return false;
     }
 
+    // TODO: Verify that we don't violate any velocity limits.
+
     pub_servo_.publish(msg_servo);
     return true;
 }
 
 bool OWDController::setStiffnessCommand(std::ostream &out, std::istream &in)
 {
-    throw OpenRAVE::openrave_exception("setStiffnessCommand is not implemented");
+    owd_msgs::SetStiffness msg_stiffness;
+    float &stiffness = msg_stiffness.request.stiffness;
+    in >> stiffness;
+
+    if (in.fail()) {
+        RAVELOG_ERROR("SetStiffness command received missing or malformed argument.\n");
+        return false;
+    } else if (stiffness < 0 || stiffness > 1) {
+        RAVELOG_ERROR("Stiffness must be in the range [0, 1]; got %f.\n",
+            static_cast<double>(msg_stiffness.request.stiffness)
+        );
+        return false;
+    } else if (stiffness != 0 && stiffness != 1) {
+        RAVELOG_WARN("Stiffness values in the range (0, 1) are experimental.\n");
+    }
+
+    bool const success = srv_set_stiffness_.call(msg_stiffness) && msg_stiffness.response.ok;
+    if (!success && !msg_stiffness.response.reason.empty()) {
+        RAVELOG_ERROR("Setting stiffness failed with error: %s\n", msg_stiffness.response.reason.c_str());
+        return false;
+    } else if (!success) {
+        RAVELOG_ERROR("Setting stiffness failed with an unknown error.\n");
+        return false;
+    }
+    return true;
 }
 
 void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wamstate)

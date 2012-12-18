@@ -7,6 +7,7 @@
 #include <owd_msgs/DeleteTrajectory.h>
 #include <owd_msgs/WAMState.h>
 #include <owd_msgs/Servo.h>
+#include <owd_msgs/SetStiffness.h>
 #include <openrave/openrave.h>
 
 class OWDController : public OpenRAVE::ControllerBase {
@@ -37,6 +38,7 @@ private:
     ros::Publisher pub_servo_;
     ros::ServiceClient srv_add_traj_;
     ros::ServiceClient srv_delete_traj_;
+    ros::ServiceClient srv_set_stiffness_;
     OpenRAVE::RobotBasePtr robot_;
     std::vector<int> dof_indices_;
     owd_msgs::WAMState::ConstPtr current_wamstate_;
