@@ -122,16 +122,35 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
     request.traj.id = "";
     request.traj.positions.resize(num_waypoints);
     request.traj.blend_radius.resize(num_waypoints);
-
-    // FIXME: Implement trajectory blending.
     request.traj.blend_radius.assign(num_waypoints, 0);
+
+    // Check if this is a blended trajectory.
+    bool is_blending;
+    OpenRAVE::ConfigurationSpecification::Group blend_group;
+    try {
+        blend_group = config_spec.GetGroupFromName("owd_blend_radius");
+
+        if (static_cast<size_t>(blend_group.dof) != num_dofs) {
+            RAVELOG_ERROR("Trajectory blend radii have the incorrect number of DOFs; expected %d got %d.\n",
+                static_cast<int>(num_dofs), blend_group.dof
+            );
+            return false;
+        }
+        is_blending = true;
+    }
+    // GetGroupFromName throws an openrave_exception, but catching it by the
+    // specific type doesn't work. I'm not sure why...
+    catch (...) {
+        RAVELOG_INFO("Did not find a blend radii in the trajectory. Using a zero blend radius.\n");
+        is_blending = false;
+    }
 
     for (size_t i = 0; i < num_waypoints; ++i) {
         std::vector<OpenRAVE::dReal> full_waypoint;
         traj->GetWaypoint(i, full_waypoint, config_spec);
 
-        // Extract only the joint values from the waypoint. The full waypoint
-        // may include extra fields that we don't care about (e.g. timestamps,
+        // Extract the joint values from the waypoint. The full waypoint may
+        // include extra fields that we don't care about (e.g. timestamps,
         // joint velocities).
         std::vector<OpenRAVE::dReal> waypoint(num_dofs);
         if (!config_spec.ExtractJointValues(waypoint.begin(), full_waypoint.begin(), robot_, dof_indices_)) {
@@ -144,9 +163,15 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
             return false;
         }
 
+        // Optionally extract the blend radius. If it doesn't exist we default
+        // to a zero blend radius (i.e. come to a complete stop at each
+        // waypoint).
+        request.traj.positions[i].j.resize(num_dofs);
         for (size_t j = 0; j < num_dofs; ++j) {
-            request.traj.positions[i].j.resize(num_dofs);
             request.traj.positions[i].j[j] = waypoint[j];
+            if (is_blending) {
+                request.traj.blend_radius[j] = full_waypoint[blend_group.offset + j];
+            }
         }
     }
 
