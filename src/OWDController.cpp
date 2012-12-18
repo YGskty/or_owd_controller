@@ -188,7 +188,19 @@ bool OWDController::servoCommand(std::ostream &out, std::istream &in)
         return false;
     }
 
-    // TODO: Verify that we don't violate any velocity limits.
+    // Verify that we don't exceed any velocity limits. This should, hopefully,
+    // help avoid velocity faulting the arm.
+    std::vector<OpenRAVE::dReal> velocity_limits;
+    robot_->GetDOFVelocityLimits(velocity_limits, dof_indices_);
+
+    for (size_t i = 0; i < num_dofs; ++i) {
+        if (std::abs(msg_servo.velocity[i]) > velocity_limits[i]) {
+            RAVELOG_ERROR("Joint J%d exceeds the joint velocity limit; %f > %f.\n",
+                msg_servo.velocity[i], velocity_limits[i]
+            );
+            return false;
+        }
+    }
 
     pub_servo_.publish(msg_servo);
     return true;
