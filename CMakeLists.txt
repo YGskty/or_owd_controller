@@ -17,6 +17,10 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 #rosbuild_genmsg()
 #rosbuild_gensrv()
 
+rosbuild_add_library(bhcontroller
+    src/BHController.cpp
+    src/BHControllerPlugin.cpp
+)
 rosbuild_add_library(owdcontroller
     src/OWDController.cpp
     src/OWDControllerPlugin.cpp

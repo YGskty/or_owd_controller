@@ -2,11 +2,11 @@
 #include <openrave/openrave.h>
 #include <openrave/plugin.h>
 #include <ros/ros.h>
-#include "OWDController.h"
+#include "BHController.h"
 
 void GetPluginAttributesValidated(OpenRAVE::PLUGININFO &info)
 { 
-    info.interfacenames[OpenRAVE::PT_Controller].push_back("OWDController");
+    info.interfacenames[OpenRAVE::PT_Controller].push_back("BHController");
     return;
 }
 
@@ -14,14 +14,12 @@ OpenRAVE::InterfaceBasePtr CreateInterfaceValidated(OpenRAVE::InterfaceType type
     std::string const &interface_name, std::istream &sinput, OpenRAVE::EnvironmentBasePtr env)
 {
 
-    if (type == OpenRAVE::PT_Controller && interface_name == "owdcontroller") {
+    if (type == OpenRAVE::PT_Controller && interface_name == "bhcontroller") {
         std::string node_name, owd_namespace;
         sinput >> node_name >> owd_namespace;
 
-        RAVELOG_INFO("name = %s  namespace = %s\n", node_name.c_str(), owd_namespace.c_str());
-
         if (sinput.fail()) {
-            RAVELOG_ERROR("OWDController is missing the node_name and/or owd_namespace parameter(s).\n");
+            RAVELOG_ERROR("BHController is missing the node_name and/or bh_namespace parameter(s).\n");
             return OpenRAVE::InterfaceBasePtr();
         }
 
@@ -33,7 +31,7 @@ OpenRAVE::InterfaceBasePtr CreateInterfaceValidated(OpenRAVE::InterfaceType type
             RAVELOG_INFO("Using existing ROS node '%s'\n", ros::this_node::getName().c_str());
         }
 
-        return boost::make_shared<OWDController>(env, owd_namespace);
+        return boost::make_shared<BHController>(env, owd_namespace);
     } else {
         return OpenRAVE::InterfaceBasePtr();
     }
