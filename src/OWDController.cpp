@@ -31,7 +31,6 @@ void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
 {
     queue_.callAvailable();
 
-
     // Update the DOF values from the most recent WAMState message.
     if (current_wamstate_) {
         std::vector<OpenRAVE::dReal> dof_values;
@@ -107,7 +106,9 @@ void OWDController::GetVelocity(std::vector<OpenRAVE::dReal> &velocities) const
 bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
                                OpenRAVE::TransformConstPtr transform)
 {
-    throw OpenRAVE::openrave_exception("SetDesired is not implemented.", OpenRAVE::ORE_NotImplemented);
+    // TODO: Only warn if the trajectory contains the arm DOFs.
+    RAVELOG_WARN("OWDController does not support SetDesired.\n");
+    return true;
 }
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
@@ -280,4 +281,3 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
     }
     current_wamstate_ = new_wamstate;
 }
-

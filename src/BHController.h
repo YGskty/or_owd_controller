@@ -6,6 +6,7 @@
 #include <openrave/openrave.h>
 #include <owd_msgs/BHState.h>
 #include <owd_msgs/MoveHand.h>
+#include <owd_msgs/ResetHand.h>
 
 class BHController : public OpenRAVE::ControllerBase {
 public:
@@ -29,7 +30,8 @@ private:
     ros::NodeHandle nh_;
     ros::CallbackQueue queue_;
     ros::Subscriber sub_bhstate_;
-    ros::ServiceClient srv_movehand_;
+    ros::ServiceClient srv_move_;
+    ros::ServiceClient srv_reset_;
     OpenRAVE::RobotBasePtr robot_;
     std::vector<int> dof_indices_;
     owd_msgs::BHState::ConstPtr current_bhstate_;
