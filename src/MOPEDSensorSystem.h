@@ -27,6 +27,7 @@ private:
     std::string model_path_;
     std::string model_suffix_;
     std::string name_prefix_;
+    double distance_threshold_sqr_;
 
     ros::NodeHandle nh_;
     ros::CallbackQueue queue_;
@@ -35,12 +36,15 @@ private:
     ros::AsyncSpinner spinner_;
 
     boost::mutex mutex_;
-    std::set<OpenRAVE::KinBodyPtr> bodies_;
+    std::multimap<std::string, OpenRAVE::KinBodyPtr> bodies_;
     std::map<std::string, size_t> numbers_;
 
     size_t getSequenceNumber(std::string const &name);
     std::string getUniqueName(std::string const &name);
     std::string getKinBodyPath(std::string const &name) const;
+    OpenRAVE::KinBodyPtr findDuplicate(std::string const &name, OpenRAVE::Transform const &tf);
+
+    OpenRAVE::Transform getORTransform(geometry_msgs::Pose const &pose);
 
     void mopedCallback(pr_msgs::ObjectPoseList const &detections);
 };

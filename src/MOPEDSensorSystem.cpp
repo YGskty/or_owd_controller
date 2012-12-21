@@ -1,5 +1,6 @@
 #include <sstream>
 #include <boost/foreach.hpp>
+#include <boost/typeof/typeof.hpp>
 #include <boost/thread/mutex.hpp>
 #include "MOPEDSensorSystem.h"
 
@@ -10,6 +11,7 @@ MOPEDSensorSystem::MOPEDSensorSystem(OpenRAVE::EnvironmentBasePtr env, std::stri
     , model_path_("/pr/pr-ros-pkg/data/pr_ordata/ordata/objects/household")
     , model_suffix_(".kinbody.xml")
     , name_prefix_("moped_")
+    , distance_threshold_sqr_(0.004) // 0.02 m threshold
     , sub_tf_(nh_)
     , spinner_(0, &queue_)
 {
@@ -44,13 +46,14 @@ OpenRAVE::KinBody::ManageDataPtr MOPEDSensorSystem::AddKinBody(OpenRAVE::KinBody
 
 bool MOPEDSensorSystem::RemoveKinBody(OpenRAVE::KinBodyPtr body)
 {
-    size_t const num_erased = bodies_.erase(body);
-    return num_erased > 0;
+    throw OpenRAVE::openrave_exception("MOPEDSensorSystem does not implement RemoveKinBody.",
+                                       OpenRAVE::ORE_NotImplemented);
 }
 
 bool MOPEDSensorSystem::IsBodyPresent(OpenRAVE::KinBodyPtr body)
 {
-    return bodies_.count(body) > 0;
+    throw OpenRAVE::openrave_exception("MOPEDSensorSystem does not implement IsBodyPresent.",
+                                       OpenRAVE::ORE_NotImplemented);
 }
 
 bool MOPEDSensorSystem::EnableBody(OpenRAVE::KinBodyPtr body, bool enable)
@@ -96,9 +99,18 @@ std::string MOPEDSensorSystem::getKinBodyPath(std::string const &name) const
 void MOPEDSensorSystem::mopedCallback(pr_msgs::ObjectPoseList const &detections)
 {
     OpenRAVE::EnvironmentBasePtr env = GetEnv();
+    OpenRAVE::EnvironmentMutex::scoped_lock lock(env->GetMutex());
 
-    RAVELOG_INFO("MOPED Callback\n");
+    // Clear the existing objects.
+    // TODO: Attempt to match objects between subsequent detections.
+    std::string tmp_type;
+    OpenRAVE::KinBodyPtr tmp_body;
+    BOOST_FOREACH (boost::tie(tmp_type, tmp_body), bodies_) {
+        env->Remove(tmp_body);
+    }
+    bodies_.clear();
 
+    // Create new KinBodies for the MOPED detections.
     BOOST_FOREACH (pr_msgs::ObjectPose const &detection, detections.object_list) {
         // Transform the pose into the OpenRAVE frame.
         geometry_msgs::PoseStamped pose_moped, pose_or;
@@ -112,16 +124,12 @@ void MOPEDSensorSystem::mopedCallback(pr_msgs::ObjectPoseList const &detections)
             // message will succeed, so we'll give up.
             RAVELOG_ERROR("Unable to transform MOPED pose: %s\n", e.what());
             return;
+        } catch (...) {
+            RAVELOG_ERROR("Unable to transform MOPED pose: An unknown error has occured.\n");
+            return;
         }
 
-        OpenRAVE::Transform tf;
-        tf.trans.x = pose_or.pose.position.x;
-        tf.trans.y = pose_or.pose.position.y;
-        tf.trans.z = pose_or.pose.position.z;
-        tf.rot.w = pose_or.pose.orientation.w;
-        tf.rot.x = pose_or.pose.orientation.x;
-        tf.rot.y = pose_or.pose.orientation.y;
-        tf.rot.z = pose_or.pose.orientation.z;
+        OpenRAVE::Transform tf = getORTransform(pose_or.pose);
 
         // Attempt to create a new KinBody and skip any objects that are
         // missing KinBody files. ReadKinBodyXMLFile is thread-safe.
@@ -135,24 +143,49 @@ void MOPEDSensorSystem::mopedCallback(pr_msgs::ObjectPoseList const &detections)
         // Assign the KinBody a unique name and add it to the environment. There
         // are potential concurrency issues between the OpenRAVE threads and the
         // AsyncSpinner thread, so we must be extra careful.
-        std::string kinbody_name;
-        {
-            boost::mutex::scoped_lock lock(mutex_);
-            kinbody_name = getUniqueName(detection.name);
-        }
+        boost::mutex::scoped_lock lock(mutex_);
+        std::string const kinbody_name = getUniqueName(detection.name);
 
         try {
-            OpenRAVE::EnvironmentMutex::scoped_lock lock(env->GetMutex());
             body->SetName(kinbody_name);
             env->Add(body);
+            body->SetTransform(tf);
         } catch (OpenRAVE::openrave_exception const &e) {
             RAVELOG_ERROR("Unable to add object '%s' to the environment.\n", kinbody_name.c_str());
             continue;
         }
+        bodies_.insert(std::make_pair(detection.name, body));
+    }
+}
 
-        {
-            boost::mutex::scoped_lock lock(mutex_);
-            bodies_.insert(body);
+OpenRAVE::KinBodyPtr MOPEDSensorSystem::findDuplicate(std::string const &name, OpenRAVE::Transform const &tf)
+{
+    BOOST_AUTO(tmp, bodies_.equal_range(name));
+    if (tmp.first == tmp.second) {
+        return OpenRAVE::KinBodyPtr();
+    }
+
+    for (BOOST_AUTO(it, tmp.first); it != tmp.second; ++it) {
+        OpenRAVE::KinBodyPtr body = it->second;
+        OpenRAVE::Transform body_tf = body->GetTransform();
+
+        double const distance = (body_tf.trans - tf.trans).lengthsqr3();
+        if (distance < distance_threshold_sqr_) {
+            return body;
         }
     }
+    return OpenRAVE::KinBodyPtr();
+}
+
+OpenRAVE::Transform MOPEDSensorSystem::getORTransform(geometry_msgs::Pose const &pose)
+{
+    OpenRAVE::Transform tf;
+    tf.trans.x = pose.position.x;
+    tf.trans.y = pose.position.y;
+    tf.trans.z = pose.position.z;
+    tf.rot.w = pose.orientation.w;
+    tf.rot.x = pose.orientation.x;
+    tf.rot.y = pose.orientation.y;
+    tf.rot.z = pose.orientation.z;
+    return tf;
 }
