@@ -1,12 +1,15 @@
 <package>
-    <description brief="OpenRAVE controller for interfacing with OWD.">
-        OpenRAVE controller for interfacing with OWD.
+    <description brief="OpenRAVE plugin for interfacing with MOPED.">
+        This package integrates the output of the MOPED object recognition
+        system into OpenRAVE. It implements the SensorSystem interface and
+        creates a KinBody for each object detected by MOPED.
     </description>
     <author>Michael Koval</author>
     <depend package="roscpp"/>
     <depend package="rosconsole"/>
     <depend package="openrave"/>
-    <depend package="owd_msgs"/>
+    <depend package="pr_msgs"/>
+    <depend package="tf"/>
     <export>
         <openrave plugins="${prefix}/lib"/>
     </export>
