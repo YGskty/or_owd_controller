@@ -143,9 +143,12 @@ bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
+    RAVELOG_DEBUG("OWDController::SetPath: Starting.\n");
     size_t const num_waypoints = traj->GetNumWaypoints();
     size_t const num_dofs = dof_indices_.size();
     OpenRAVE::ConfigurationSpecification const config_spec = traj->GetConfigurationSpecification();
+    RAVELOG_DEBUG("OWDController::SetPath: Processing trajectory with %d waypoints defined for %d DOFs.\n",
+                   num_waypoints, num_dofs);
 
     owd_msgs::AddTrajectory::Request request;
     // FIXME: Which options should I pass here?
@@ -210,6 +213,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
     owd_msgs::AddTrajectory::Response response;
     bool const success = srv_add_traj_.call(request, response) && response.ok;
     if (success) {
+        RAVELOG_DEBUG("Successfully added the trajectory to OWD.");
         traj_id_ = response.id;
     } else if (!response.reason.empty()) {
         RAVELOG_ERROR("Adding the trajectory to OWD failed with error: %s\n", response.reason.c_str());
