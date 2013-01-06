@@ -28,6 +28,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *************************************************************************/
 
+/** \file OWDController.h
+ * \brief OpenRAVE controller for controlling a Barrett WAM arm using OWD.
+ * \author Michael Koval
+ * \date 2012
+ */
 #ifndef OWDCONTROLLER_H_
 #define OWDCONTROLLER_H_
 

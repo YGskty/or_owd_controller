@@ -28,6 +28,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *************************************************************************/
 
+/** \file BHController.cpp
+ * \brief OpenRAVE controller for controlling a BarrettHand using OWD.
+ * \author Michael Koval
+ * \date 2012
+ */
 #include "BHController.h"
 
 BHController::BHController(OpenRAVE::EnvironmentBasePtr env, std::string const &ns)
@@ -133,8 +138,7 @@ bool BHController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool BHController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
-    // TODO: Only warn if the trajectory contains the finger DOFs.
-    RAVELOG_WARN("BHController does not support SetPath.\n");
+    // TODO: warn if the trajectory contains the finger DOFs.
     return true;
 }
 

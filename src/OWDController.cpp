@@ -28,6 +28,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *************************************************************************/
 
+/** \file OWDController.cpp
+ * \brief OpenRAVE controller for controlling a Barrett WAM arm using OWD.
+ * \author Michael Koval
+ * \date 2012
+ */
 #include "OWDController.h"
 
 OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const &ns)
@@ -54,6 +59,15 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
     srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
     srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
+
+    // Block until we can update the controlled DOFs. Otherwise the user could
+    // hit a race condition by planning using the robot's default configuration.
+    RAVELOG_DEBUG("Waiting for WAMState message.\n");
+    OpenRAVE::EnvironmentMutex::scoped_lock lock(robot->GetEnv()->GetMutex());
+    owd_msgs::WAMState::ConstPtr wamstate = ros::topic::waitForMessage<owd_msgs::WAMState>("wamstate", nh_owd);
+    wamstateCallback(wamstate);
+    SimulationStep(0);
+    RAVELOG_DEBUG("Received WAMState message. Initialization is complete.\n");
     return true;
 }
 
@@ -136,8 +150,6 @@ void OWDController::GetVelocity(std::vector<OpenRAVE::dReal> &velocities) const
 bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
                                OpenRAVE::TransformConstPtr transform)
 {
-    // TODO: Only warn if the trajectory contains the arm DOFs.
-    RAVELOG_WARN("OWDController does not support SetDesired.\n");
     return true;
 }
 
@@ -175,7 +187,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
     // GetGroupFromName throws an openrave_exception, but catching it by the
     // specific type doesn't work. I'm not sure why...
     catch (...) {
-        RAVELOG_INFO("Did not find a blend radii in the trajectory. Using a zero blend radius.\n");
+        RAVELOG_INFO("Did not find blend radii in the trajectory. Using a zero blend radius.\n");
         is_blending = false;
     }
 
@@ -213,7 +225,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
     owd_msgs::AddTrajectory::Response response;
     bool const success = srv_add_traj_.call(request, response) && response.ok;
     if (success) {
-        RAVELOG_DEBUG("Successfully added the trajectory to OWD.");
+        RAVELOG_DEBUG("Successfully added the trajectory to OWD.\n");
         traj_id_ = response.id;
     } else if (!response.reason.empty()) {
         RAVELOG_ERROR("Adding the trajectory to OWD failed with error: %s\n", response.reason.c_str());

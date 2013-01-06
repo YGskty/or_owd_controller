@@ -28,6 +28,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *************************************************************************/
 
+/** \file BHController.h
+ * \brief OpenRAVE controller for controlling a BarrettHand using OWD.
+ * \author Michael Koval
+ * \date 2012
+ */
 #ifndef BHCONTROLLER_H_
 #define BHCONTROLLER_H_
 
