@@ -74,7 +74,12 @@ void BHController::SimulationStep(OpenRAVE::dReal time_ellapsed)
             dof_values[dof_index] = current_bhstate_->positions[index];
         }
 
+
+        // This prevents OpenRAVE from spamming "DOF is not in limits" warnings.
+        int const debug_level = OpenRAVE::RaveGetDebugLevel();
+        OpenRAVE::RaveSetDebugLevel(OpenRAVE::Level_Fatal);
         robot_->SetDOFValues(dof_values);
+        OpenRAVE::RaveSetDebugLevel(debug_level);
     }
 }
 

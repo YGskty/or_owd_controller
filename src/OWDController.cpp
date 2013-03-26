@@ -78,7 +78,12 @@ void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
             BOOST_ASSERT(dof_index < dof_values.size());
             dof_values[dof_index] = current_wamstate_->positions[owd_index];
         }
+
+        // This prevents OpenRAVE from spamming "DOF is not in limits" warnings.
+        int const debug_level = OpenRAVE::RaveGetDebugLevel();
+        OpenRAVE::RaveSetDebugLevel(OpenRAVE::Level_Fatal);
         robot_->SetDOFValues(dof_values);
+        OpenRAVE::RaveSetDebugLevel(debug_level);
     }
 }
 
