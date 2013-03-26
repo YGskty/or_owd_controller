@@ -78,6 +78,7 @@ private:
     std::vector<int> dof_indices_;
     owd_msgs::WAMState::ConstPtr current_wamstate_;
 
+    bool waitForUpdate(std::ostream &out, std::istream &in);
     bool servoCommand(std::ostream &out, std::istream &in);
     bool setStiffnessCommand(std::ostream &out, std::istream &in);
 

@@ -39,6 +39,8 @@ OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const
     : OpenRAVE::ControllerBase(env)
     , owd_ns_(ns)
 {
+    RegisterCommand("WaitForUpdate", boost::bind(&OWDController::waitForUpdate, this, _1, _2),
+                    "Block for an update.");
     RegisterCommand("Servo", boost::bind(&OWDController::servoCommand, this, _1, _2),
                     "Servo with an instantaneous joint velocity.");
     RegisterCommand("SetStiffness", boost::bind(&OWDController::setStiffnessCommand, this, _1, _2),
@@ -59,15 +61,6 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
     srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
     srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
-
-    // Block until we can update the controlled DOFs. Otherwise the user could
-    // hit a race condition by planning using the robot's default configuration.
-    RAVELOG_DEBUG("Waiting for WAMState message.\n");
-    OpenRAVE::EnvironmentMutex::scoped_lock lock(robot->GetEnv()->GetMutex());
-    owd_msgs::WAMState::ConstPtr wamstate = ros::topic::waitForMessage<owd_msgs::WAMState>("wamstate", nh_owd);
-    wamstateCallback(wamstate);
-    SimulationStep(0);
-    RAVELOG_DEBUG("Received WAMState message. Initialization is complete.\n");
     return true;
 }
 
@@ -85,7 +78,6 @@ void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
             BOOST_ASSERT(dof_index < dof_values.size());
             dof_values[dof_index] = current_wamstate_->positions[owd_index];
         }
-
         robot_->SetDOFValues(dof_values);
     }
 }
@@ -234,6 +226,21 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
         RAVELOG_ERROR("Adding the trajectory to OWD failed with an unknown error.\n");
         return false;
     }
+    return true;
+}
+
+bool OWDController::waitForUpdate(std::ostream &out, std::istream &in)
+{
+    // Block until we can update the controlled DOFs. Otherwise the user could
+    // hit a race condition by planning using the robot's default configuration.
+    RAVELOG_DEBUG("Waiting for WAMState message.\n");
+    ros::NodeHandle nh_owd(nh_, owd_ns_);
+    owd_msgs::WAMState::ConstPtr wamstate = ros::topic::waitForMessage<owd_msgs::WAMState>("wamstate", nh_owd);
+
+    OpenRAVE::EnvironmentMutex::scoped_lock lock(robot_->GetEnv()->GetMutex());
+    wamstateCallback(wamstate);
+    SimulationStep(0);
+    RAVELOG_DEBUG("Received WAMState message. Initialization is complete.\n");
     return true;
 }
 

@@ -39,6 +39,8 @@ BHController::BHController(OpenRAVE::EnvironmentBasePtr env, std::string const &
     : OpenRAVE::ControllerBase(env)
     , bhd_ns_(ns)
 {
+    RegisterCommand("WaitForUpdate", boost::bind(&BHController::waitForUpdate, this, _1, _2),
+                    "Block for an update.");
 }
 
 bool BHController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
@@ -139,6 +141,21 @@ bool BHController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 bool BHController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
     // TODO: warn if the trajectory contains the finger DOFs.
+    return true;
+}
+
+bool BHController::waitForUpdate(std::ostream &out, std::istream &in)
+{
+    // Block until we can update the controlled DOFs. Otherwise the user could
+    // hit a race condition by planning using the robot's default configuration.
+    RAVELOG_DEBUG("Waiting for BHState message.\n");
+    ros::NodeHandle nh_bhd(nh_, bhd_ns_);
+    owd_msgs::BHState::ConstPtr bhstate = ros::topic::waitForMessage<owd_msgs::BHState>("handstate", nh_bhd);
+
+    OpenRAVE::EnvironmentMutex::scoped_lock lock(robot_->GetEnv()->GetMutex());
+    bhstateCallback(bhstate);
+    SimulationStep(0);
+    RAVELOG_DEBUG("Received BHState message. Initialization is complete.\n");
     return true;
 }
 

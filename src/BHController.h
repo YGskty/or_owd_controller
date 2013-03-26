@@ -71,6 +71,7 @@ private:
     std::vector<int> dof_indices_;
     owd_msgs::BHState::ConstPtr current_bhstate_;
 
+    bool waitForUpdate(std::ostream &out, std::istream &in);
     void bhstateCallback(owd_msgs::BHState::ConstPtr const &bhstate);
 };
 
