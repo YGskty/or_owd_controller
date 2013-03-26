@@ -61,9 +61,9 @@ OpenRAVE::InterfaceBasePtr CreateInterfaceValidated(OpenRAVE::InterfaceType type
         if (!ros::isInitialized()) {
             int argc = 0;
             ros::init(argc, NULL, node_name, ros::init_options::AnonymousName);
-            RAVELOG_INFO("Starting ROS node '%s'.\n", node_name.c_str());
+            RAVELOG_DEBUG("Starting ROS node '%s'.\n", node_name.c_str());
         } else {
-            RAVELOG_INFO("Using existing ROS node '%s'\n", ros::this_node::getName().c_str());
+            RAVELOG_DEBUG("Using existing ROS node '%s'\n", ros::this_node::getName().c_str());
         }
 
         return boost::make_shared<BHController>(env, owd_namespace);
