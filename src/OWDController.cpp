@@ -61,6 +61,7 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
     srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
     srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
+    srv_force_threshold_ = nh_owd.serviceClient<owd_msgs::SetForceInputThreshold>("SetForceInputThreshold");
     return true;
 }
 
@@ -160,8 +161,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
                    num_waypoints, num_dofs);
 
     owd_msgs::AddTrajectory::Request request;
-    // FIXME: Which options should I pass here?
-    request.traj.options = owd_msgs::JointTraj::opt_CancelOnStall;
+    request.traj.options = parseTrajectoryFlags(traj);
     request.traj.id = "";
     request.traj.positions.resize(num_waypoints);
     request.traj.blend_radius.resize(num_waypoints);
@@ -173,9 +173,9 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
     try {
         blend_group = config_spec.GetGroupFromName("owd_blend_radius");
 
-        if (static_cast<size_t>(blend_group.dof) != num_dofs) {
+        if (blend_group.dof != 1) {
             RAVELOG_ERROR("Trajectory blend radii have the incorrect number of DOFs; expected %d got %d.\n",
-                static_cast<int>(num_dofs), blend_group.dof
+                1, blend_group.dof
             );
             return false;
         }
@@ -213,7 +213,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
         for (size_t j = 0; j < num_dofs; ++j) {
             request.traj.positions[i].j[j] = waypoint[j];
             if (is_blending) {
-                request.traj.blend_radius[j] = full_waypoint[blend_group.offset + j];
+                request.traj.blend_radius[i] = full_waypoint[blend_group.offset];
             }
         }
     }
@@ -338,4 +338,109 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
         return;
     }
     current_wamstate_ = new_wamstate;
+}
+
+int OWDController::parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj)
+{
+    static std::string const group_prefix = "or_owd_controller";
+    bool stop_on_stall = false;
+    bool stop_on_ft = false;
+    double force_magnitude = 0.0;
+    std::vector<double> force_direction(3);
+    std::vector<double> torque(3);
+
+    // Extract the flags from a bogus trajectory group. This is a hack since
+    // we can't read trajectory UserData that is set in Python.
+    RAVELOG_DEBUG("Reading configuration specification.\n");
+    OpenRAVE::ConfigurationSpecification config_spec = traj->GetConfigurationSpecification();
+    OpenRAVE::ConfigurationSpecification::Group owd_group;
+    try {
+        owd_group = config_spec.GetGroupFromName(group_prefix);
+    }
+    // GetGroupFromName throws an openrave_exception, but catching it by the
+    // specific type doesn't work. I'm not sure why...
+    catch (...) {
+        RAVELOG_WARN("Trajectory is missing the %s group.\n", group_prefix.c_str());
+        return 0;
+    }
+
+    // Verify that we found the right group. All of this is possible because
+    // OpenRAVE only matches group prefixes.
+    std::stringstream flags_stream;
+    std::string found_group_prefix;
+    flags_stream << owd_group.name;
+    flags_stream >> found_group_prefix;
+
+    if (found_group_prefix != group_prefix) {
+        RAVELOG_WARN("Expected group %s, but found %s.\n",
+                     group_prefix.c_str(), found_group_prefix.c_str()); 
+        return 0;
+    }
+    RAVELOG_DEBUG("Found trajectory flags: %s\n", flags_stream.str().c_str());
+
+    while (flags_stream.good()) {
+        std::string key;
+        flags_stream >> key; 
+
+        if (key == "stop_on_stall") {
+            flags_stream >> stop_on_stall;
+        } else if (key == "stop_on_ft") {
+            flags_stream >> stop_on_ft;
+        } else if (key == "force_magnitude") {
+            flags_stream >> force_magnitude;
+        } else if (key == "force_direction") {
+            flags_stream >> force_direction[0] >> force_direction[1] >> force_direction[2];
+        } else if (key == "torque") {
+            flags_stream >> torque[0] >> torque[1] >> torque[2];
+        } else {
+            RAVELOG_ERROR("Unknown option '%s'.\n", key.c_str());
+            throw OpenRAVE::openrave_exception("Unknown trajectory execution option.",
+                                               OpenRAVE::ORE_InvalidArguments);
+        }
+    }
+
+    if (flags_stream.fail()) {
+        RAVELOG_ERROR("Unable to extract options from the trajectory.\n");
+        throw OpenRAVE::openrave_exception("Unable to extract options from the trajectory.",
+                                           OpenRAVE::ORE_InvalidArguments);
+    }
+    RAVELOG_DEBUG("Flags: stop_on_stall %d stop_on_ft %d\n", stop_on_stall, stop_on_ft);
+
+    // Create the trajectory options bitmask.
+    int flags = 0;
+    if (stop_on_stall) {
+        flags |= owd_msgs::JointTraj::opt_CancelOnStall;
+    }
+    if (stop_on_ft) {
+        flags |= owd_msgs::JointTraj::opt_CancelOnForceInput;
+    }
+
+    // Set the force/torque thresholds.
+    if (stop_on_ft) {
+        owd_msgs::SetForceInputThreshold msg;
+        msg.request.direction.x = force_direction[0];
+        msg.request.direction.y = force_direction[1];
+        msg.request.direction.z = force_direction[2];
+        msg.request.force = force_magnitude;
+        msg.request.torques.x = torque[0];
+        msg.request.torques.y = torque[1];
+        msg.request.torques.z = torque[2];
+
+        bool success = srv_force_threshold_.call(msg) && msg.response.ok;
+        if (!success && !msg.response.reason.empty()) {
+            RAVELOG_ERROR("Setting force/torque threshold failed with error: %s\n",
+                          msg.response.reason.c_str());
+            throw OpenRAVE::openrave_exception("Failed setting force/torque threshold in OWD.",
+                                               OpenRAVE::ORE_Failed);
+        } else if (!success) {
+            RAVELOG_ERROR("Setting force/torque threshold failed with an unknown error.\n");
+            throw OpenRAVE::openrave_exception("Failed setting force/torque threshold in OWD.",
+                                               OpenRAVE::ORE_Failed);
+        }
+        RAVELOG_DEBUG("Set thresholds: direction = [ %f %f %f ], magnitude = %f, torque = [ %f %f %f ]\n",
+                      msg.request.direction.x, msg.request.direction.y, msg.request.direction.z,
+                      msg.request.force,
+                      msg.request.torques.x, msg.request.torques.y, msg.request.torques.z);
+    }
+    return flags;
 }

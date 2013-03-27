@@ -42,6 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <owd_msgs/DeleteTrajectory.h>
 #include <owd_msgs/WAMState.h>
 #include <owd_msgs/Servo.h>
+#include <owd_msgs/SetForceInputThreshold.h>
 #include <owd_msgs/SetStiffness.h>
 #include <openrave/openrave.h>
 
@@ -74,6 +75,7 @@ private:
     ros::ServiceClient srv_add_traj_;
     ros::ServiceClient srv_delete_traj_;
     ros::ServiceClient srv_set_stiffness_;
+    ros::ServiceClient srv_force_threshold_;
     OpenRAVE::RobotBasePtr robot_;
     std::vector<int> dof_indices_;
     owd_msgs::WAMState::ConstPtr current_wamstate_;
@@ -83,6 +85,8 @@ private:
     bool setStiffnessCommand(std::ostream &out, std::istream &in);
 
     void wamstateCallback(owd_msgs::WAMState::ConstPtr const &wamstate);
+
+    int parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj);
 };
 
 #endif
