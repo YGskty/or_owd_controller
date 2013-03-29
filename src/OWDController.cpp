@@ -45,6 +45,8 @@ OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const
                     "Servo with an instantaneous joint velocity.");
     RegisterCommand("SetStiffness", boost::bind(&OWDController::setStiffnessCommand, this, _1, _2),
                     "Change the stiffness of the joints; 0 is gravity compensation and 1 is stiff.");
+    RegisterCommand("SetSpeed", boost::bind(&OWDController::setSpeedCommand, this, _1, _2),
+                    "Change the min_accel_time and joint velocity limits.");
 }
 
 bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
@@ -61,6 +63,7 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
     srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
     srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
+    srv_set_speed_ = nh_owd.serviceClient<owd_msgs::SetSpeed>("SetSpeed");
     srv_force_threshold_ = nh_owd.serviceClient<owd_msgs::SetForceInputThreshold>("SetForceInputThreshold");
     return true;
 }
@@ -338,6 +341,32 @@ bool OWDController::setStiffnessCommand(std::ostream &out, std::istream &in)
         return false;
     } else if (!success) {
         RAVELOG_ERROR("Setting stiffness failed with an unknown error.\n");
+        return false;
+    }
+    return true;
+}
+
+bool OWDController::setSpeedCommand(std::ostream &out, std::istream &in)
+{
+    size_t const num_dofs = dof_indices_.size();
+
+    owd_msgs::SetSpeed msg_speed;
+    msg_speed.request.velocities.resize(num_dofs);
+
+    in >> msg_speed.request.min_accel_time;
+    for (size_t i = 0; i < num_dofs; ++i) {
+        in >> msg_speed.request.velocities[i];
+    }
+
+    if (in.fail()) {
+        RAVELOG_ERROR("Unable to parse arugments to SetSpeed.\n");
+        return false;
+    }
+
+    // Call the OWD SetSpeed service.
+    bool const success = srv_set_speed_.call(msg_speed) && msg_speed.response.ok;
+    if (!success) {
+        RAVELOG_ERROR("Setting speed failed with error: %s\n", msg_speed.response.reason.c_str());
         return false;
     }
     return true;

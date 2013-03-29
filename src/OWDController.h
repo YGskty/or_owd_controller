@@ -44,6 +44,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <owd_msgs/Servo.h>
 #include <owd_msgs/SetForceInputThreshold.h>
 #include <owd_msgs/SetStiffness.h>
+#include <owd_msgs/SetSpeed.h>
 #include <openrave/openrave.h>
 
 class OWDController : public OpenRAVE::ControllerBase {
@@ -76,6 +77,7 @@ private:
     ros::ServiceClient srv_delete_traj_;
     ros::ServiceClient srv_set_stiffness_;
     ros::ServiceClient srv_force_threshold_;
+    ros::ServiceClient srv_set_speed_;
     OpenRAVE::RobotBasePtr robot_;
     std::vector<int> dof_indices_;
     owd_msgs::WAMState::ConstPtr current_wamstate_;
@@ -83,6 +85,7 @@ private:
     bool waitForUpdate(std::ostream &out, std::istream &in);
     bool servoCommand(std::ostream &out, std::istream &in);
     bool setStiffnessCommand(std::ostream &out, std::istream &in);
+    bool setSpeedCommand(std::ostream &out, std::istream &in);
 
     void wamstateCallback(owd_msgs::WAMState::ConstPtr const &wamstate);
 
