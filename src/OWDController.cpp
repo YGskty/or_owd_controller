@@ -53,6 +53,7 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
 {
     BOOST_ASSERT(robot && ctrl_transform == 0);
     robot_ = robot;
+    execution_time_ = ros::Time::now();
 
     nh_.setCallbackQueue(&queue_);
     ros::NodeHandle nh_owd(nh_, owd_ns_);
@@ -115,6 +116,10 @@ void OWDController::Reset(int options)
 
 bool OWDController::IsDone(void)
 {
+    // Check if we're still waiting for the arm to move.
+    if (current_wamstate_->header.stamp <= execution_time_) {
+        return false;
+    }
     return !current_wamstate_ || (current_wamstate_->state != owd_msgs::WAMState::state_traj_active
                               &&  current_wamstate_->state != owd_msgs::WAMState::state_traj_stalled
                               &&  current_wamstate_->state != owd_msgs::WAMState::state_traj_paused);
@@ -256,6 +261,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
         RAVELOG_ERROR("Adding the trajectory to OWD failed with an unknown error.\n");
         return false;
     }
+    execution_time_ = ros::Time::now();
     return true;
 }
 
@@ -377,7 +383,6 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
     // Verify that we received the WAMState messages in sequential order.
     if (current_wamstate_ && new_wamstate->header.stamp < current_wamstate_->header.stamp) {
         RAVELOG_WARN("Received WAMState message with an out-of-order timestamp.\n");
-        current_wamstate_ = owd_msgs::WAMState::ConstPtr();
         return;
     }
     // Verify that the message contains the correct number of DOFs.
