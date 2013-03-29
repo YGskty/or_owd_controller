@@ -153,7 +153,6 @@ bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
-    RAVELOG_INFO("SetPath on %s\n", owd_ns_.c_str());
     RAVELOG_DEBUG("OWDController::SetPath: Starting.\n");
     size_t const num_waypoints = traj->GetNumWaypoints();
     size_t const num_dofs = dof_indices_.size();
@@ -192,6 +191,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 
     std::vector<OpenRAVE::dReal> current_dofs(num_dofs);
     robot_->GetDOFValues(current_dofs, dof_indices_);
+    bool dofs_changed = false;
 
     for (size_t i = 0; i < num_waypoints; ++i) {
         std::vector<OpenRAVE::dReal> full_waypoint;
@@ -214,18 +214,12 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
             return false;
         }
 
-        // Short-circuit if none of the DOF values changed.
-        bool dofs_changed = false;
+        // Check if any of the DOFs changed.
         for (size_t j = 0; j < num_dofs; ++j) {
             if (waypoint[j] != current_dofs[j]) {
                 dofs_changed = true;
                 break;
             }
-        }
-
-        if (!dofs_changed) {
-            RAVELOG_DEBUG("Not executing trajectory. No DOF values changed.\n");
-            return true;
         }
 
         // Optionally extract the blend radius. If it doesn't exist we default
@@ -238,6 +232,12 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
                 request.traj.blend_radius[i] = full_waypoint[blend_group.offset];
             }
         }
+    }
+
+    // Short-circuit if none of the DOF values changed.
+    if (!dofs_changed) {
+        RAVELOG_DEBUG("Not executing trajectory. No DOF values changed.\n");
+        return true;
     }
 
     // Add the trajectory to OWD.
