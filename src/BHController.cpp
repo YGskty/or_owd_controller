@@ -48,6 +48,7 @@ bool BHController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &do
     BOOST_ASSERT(robot && ctrl_transform == 0);
     BOOST_ASSERT(dof_indices.size() == 4);
     robot_ = robot;
+    execution_time_ = ros::Time::now();
 
     nh_.setCallbackQueue(&queue_);
     ros::NodeHandle nh_bhd(nh_, bhd_ns_);
@@ -99,6 +100,10 @@ void BHController::Reset(int options)
 
 bool BHController::IsDone(void)
 {
+    // Check if we're still waiting for the fingers to move.
+    if (current_bhstate_->header.stamp <= execution_time_) {
+        return false;
+    }
     return !current_bhstate_ || current_bhstate_->state == owd_msgs::BHState::state_done;
 }
 
@@ -120,6 +125,7 @@ int BHController::IsControlTransformation(void) const
 bool BHController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
                                OpenRAVE::TransformConstPtr transform)
 {
+    OpenRAVE::EnvironmentMutex::scoped_lock lock(robot_->GetEnv()->GetMutex());
     BOOST_ASSERT(values.size() == dof_indices_.size() && !transform);
     size_t const num_dofs = dof_indices_.size();
 
@@ -140,6 +146,7 @@ bool BHController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
         RAVELOG_ERROR("Moving hand failed with unknown error.\n");
         return false;
     }
+    execution_time_ = ros::Time::now();
     return true;
 }
 
@@ -169,7 +176,6 @@ void BHController::bhstateCallback(owd_msgs::BHState::ConstPtr const &new_bhstat
     // Verify that we received the WAMState messages in sequential order.
     if (current_bhstate_ && new_bhstate->header.stamp < current_bhstate_->header.stamp) {
         RAVELOG_WARN("Received BHState message with an out-of-order timestamp.\n");
-        current_bhstate_ = owd_msgs::BHState::ConstPtr();
         return;
     }
     // Verify that the message contains the correct number of DOFs.

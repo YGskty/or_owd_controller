@@ -61,6 +61,7 @@ public:
     virtual bool SetPath(OpenRAVE::TrajectoryBaseConstPtr traj);
 
 private:
+    ros::Time execution_time_;
     std::string bhd_ns_;
     ros::NodeHandle nh_;
     ros::CallbackQueue queue_;
