@@ -153,6 +153,7 @@ bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
+    RAVELOG_INFO("SetPath on %s\n", owd_ns_.c_str());
     RAVELOG_DEBUG("OWDController::SetPath: Starting.\n");
     size_t const num_waypoints = traj->GetNumWaypoints();
     size_t const num_dofs = dof_indices_.size();
@@ -188,22 +189,43 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
         is_blending = false;
     }
 
+
+    std::vector<OpenRAVE::dReal> current_dofs(num_dofs);
+    robot_->GetDOFValues(current_dofs, dof_indices_);
+
     for (size_t i = 0; i < num_waypoints; ++i) {
         std::vector<OpenRAVE::dReal> full_waypoint;
         traj->GetWaypoint(i, full_waypoint, config_spec);
 
+        // Initialize the waypoint to the current joint values. We'll only
+        // change the DOF values included in the trajectory from these default
+        // values.
+        std::vector<OpenRAVE::dReal> waypoint = current_dofs;
+
         // Extract the joint values from the waypoint. The full waypoint may
         // include extra fields that we don't care about (e.g. timestamps,
         // joint velocities).
-        std::vector<OpenRAVE::dReal> waypoint(num_dofs);
         if (!config_spec.ExtractJointValues(waypoint.begin(), full_waypoint.begin(), robot_, dof_indices_)) {
-            RAVELOG_ERROR("Unable to extract joint values from waypoint.\n");
-            return false;
+            return true;
         } else if (waypoint.size() != num_dofs) {
             RAVELOG_ERROR("Unable to extract joint values from waypoint; expected %d, got %d.\n",
                 static_cast<int>(num_dofs), static_cast<int>(waypoint.size())
             );
             return false;
+        }
+
+        // Short-circuit if none of the DOF values changed.
+        bool dofs_changed = false;
+        for (size_t j = 0; j < num_dofs; ++j) {
+            if (waypoint[j] != current_dofs[j]) {
+                dofs_changed = true;
+                break;
+            }
+        }
+
+        if (!dofs_changed) {
+            RAVELOG_DEBUG("Not executing trajectory. No DOF values changed.\n");
+            return true;
         }
 
         // Optionally extract the blend radius. If it doesn't exist we default
