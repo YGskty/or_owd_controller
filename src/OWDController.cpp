@@ -161,6 +161,11 @@ bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
+    // OpenRAVE sends a NULL trajectory when you click on the robot.
+    if (!traj) {
+        return true;
+    }
+
     RAVELOG_DEBUG("OWDController::SetPath: Starting.\n");
     size_t const num_waypoints = traj->GetNumWaypoints();
     size_t const num_dofs = dof_indices_.size();
