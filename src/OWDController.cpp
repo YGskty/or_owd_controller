@@ -38,6 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const &ns)
     : OpenRAVE::ControllerBase(env)
     , owd_ns_(ns)
+   ,  initialized_(false)
 {
     RegisterCommand("WaitForUpdate", boost::bind(&OWDController::waitForUpdate, this, _1, _2),
                     "Block for an update.");
@@ -51,6 +52,7 @@ OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const
 
 bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
 {
+  if(!initialized_){
     BOOST_ASSERT(robot && ctrl_transform == 0);
     robot_ = robot;
     execution_time_ = ros::Time::now();
@@ -66,7 +68,10 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
     srv_set_speed_ = nh_owd.serviceClient<owd_msgs::SetSpeed>("SetSpeed");
     srv_force_threshold_ = nh_owd.serviceClient<owd_msgs::SetForceInputThreshold>("SetForceInputThreshold");
-    return true;
+    
+    initialized_ = true;
+  }
+  return true;
 }
 
 void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
