@@ -37,8 +37,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 BHController::BHController(OpenRAVE::EnvironmentBasePtr env, std::string const &ns)
     : OpenRAVE::ControllerBase(env)
-    , bhd_ns_(ns)
    ,  initialized_(false)
+    , bhd_ns_(ns)
 {
     RegisterCommand("WaitForUpdate", boost::bind(&BHController::waitForUpdate, this, _1, _2),
                     "Block for an update.");
@@ -46,7 +46,10 @@ BHController::BHController(OpenRAVE::EnvironmentBasePtr env, std::string const &
 
 bool BHController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
 {
-  if(!initialized_){
+    if (initialized_) {
+        return true;
+    }
+
     BOOST_ASSERT(robot && ctrl_transform == 0);
     BOOST_ASSERT(dof_indices.size() == 4);
     robot_ = robot;
@@ -60,8 +63,7 @@ bool BHController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &do
     srv_move_ = nh_bhd.serviceClient<owd_msgs::MoveHand>("MoveHand");
     srv_reset_ = nh_bhd.serviceClient<owd_msgs::ResetHand>("ResetHand");
     initialized_ = true;
-  }
-  return true;
+    return true;
 }
 
 void BHController::SimulationStep(OpenRAVE::dReal time_ellapsed)
