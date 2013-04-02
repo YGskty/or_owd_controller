@@ -88,6 +88,7 @@ private:
     bool servoCommand(std::ostream &out, std::istream &in);
     bool setStiffnessCommand(std::ostream &out, std::istream &in);
     bool setSpeedCommand(std::ostream &out, std::istream &in);
+    bool getStatusCommand(std::ostream &out, std::istream &in);
 
     void wamstateCallback(owd_msgs::WAMState::ConstPtr const &wamstate);
 

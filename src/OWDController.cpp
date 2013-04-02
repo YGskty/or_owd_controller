@@ -48,6 +48,8 @@ OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const
                     "Change the stiffness of the joints; 0 is gravity compensation and 1 is stiff.");
     RegisterCommand("SetSpeed", boost::bind(&OWDController::setSpeedCommand, this, _1, _2),
                     "Change the min_accel_time and joint velocity limits.");
+    RegisterCommand("GetStatus", boost::bind(&OWDController::getStatusCommand, this, _1, _2),
+                    "Get the trajectory execution status.");
 }
 
 bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
@@ -86,7 +88,14 @@ void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
         for (size_t owd_index = 0; owd_index < dof_indices_.size(); ++owd_index) {
             size_t const dof_index = dof_indices_[owd_index];
             BOOST_ASSERT(dof_index < dof_values.size());
-            dof_values[dof_index] = current_wamstate_->positions[owd_index];
+
+            // Use target_positions if available. This is necessary for newer
+            // versions of OWD that publish joint encoders as positions.
+            if (!current_wamstate_->target_positions.empty()) {
+                dof_values[dof_index] = current_wamstate_->target_positions[owd_index];
+            } else {
+                dof_values[dof_index] = current_wamstate_->positions[owd_index];
+            }
         }
 
         // This prevents OpenRAVE from spamming "DOF is not in limits" warnings.
@@ -404,6 +413,34 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
         return;
     }
     current_wamstate_ = new_wamstate;
+}
+
+bool OWDController::getStatusCommand(std::ostream &out, std::istream &in)
+{
+    if (!current_wamstate_) {
+        RAVELOG_ERROR("Attempted to query trajectory status with no active WAMState message.\n");
+        return false;
+    }
+
+    uint8_t const state = current_wamstate_->prev_trajectory.state;
+    switch (state) {
+    case owd_msgs::TrajInfo::state_pending:
+        out << "pending";
+        break;
+    case owd_msgs::TrajInfo::state_active:
+        out << "active";
+        break;
+    case owd_msgs::TrajInfo::state_done:
+        out << "done";
+        break;
+    case owd_msgs::TrajInfo::state_aborted:
+        out << "aborted";
+        break;
+    default:
+        RAVELOG_ERROR("Unknown trajectory state %d.\n", state);
+        return false;
+    }
+    return true;
 }
 
 int OWDController::parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj)
