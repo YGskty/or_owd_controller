@@ -65,9 +65,11 @@ public:
     virtual bool SetDesired(std::vector<OpenRAVE::dReal> const &values,
                             OpenRAVE::TransformConstPtr transform = OpenRAVE::TransformConstPtr());
     virtual bool SetPath(OpenRAVE::TrajectoryBaseConstPtr traj);
+    
 
 private:
     bool initialized_;
+    bool status_cleared_;
     ros::Time execution_time_;
     std::string owd_ns_;
     std::string traj_id_;
@@ -89,10 +91,12 @@ private:
     bool setStiffnessCommand(std::ostream &out, std::istream &in);
     bool setSpeedCommand(std::ostream &out, std::istream &in);
     bool getStatusCommand(std::ostream &out, std::istream &in);
+    bool clearStatusCommand(std::ostream &out, std::istream &in);
 
     void wamstateCallback(owd_msgs::WAMState::ConstPtr const &wamstate);
 
     int parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj);
+    
 };
 
 #endif

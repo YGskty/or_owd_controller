@@ -50,6 +50,8 @@ OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const
                     "Change the min_accel_time and joint velocity limits.");
     RegisterCommand("GetStatus", boost::bind(&OWDController::getStatusCommand, this, _1, _2),
                     "Get the trajectory execution status.");
+    RegisterCommand("ClearStatus", boost::bind(&OWDController::clearStatusCommand, this, _1, _2),
+                    "Clear the trajectory execution status.");
 }
 
 bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
@@ -281,6 +283,7 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
         return false;
     }
     execution_time_ = ros::Time::now();
+    status_cleared_ = false;
     return true;
 }
 
@@ -420,6 +423,9 @@ bool OWDController::getStatusCommand(std::ostream &out, std::istream &in)
     if (!current_wamstate_) {
         RAVELOG_ERROR("Attempted to query trajectory status with no active WAMState message.\n");
         return false;
+    }else if(status_cleared_) {
+        out << "cleared";
+	return true;
     }
 
     uint8_t const state = current_wamstate_->prev_trajectory.state;
@@ -441,6 +447,11 @@ bool OWDController::getStatusCommand(std::ostream &out, std::istream &in)
         return false;
     }
     return true;
+}
+
+bool OWDController::clearStatusCommand(std::ostream &out, std::istream &in)
+{
+    status_cleared_ = true;
 }
 
 int OWDController::parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj)
