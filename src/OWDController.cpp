@@ -302,6 +302,36 @@ bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr tr
 
 bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConstPtr traj)
 {
+    // Set the force/torque threshold for guarded moves.
+    if (traj->GetExecutionFlags() & owd_msgs::JointTraj::opt_CancelOnForceInput) {
+        // Split the force vector into a magnitude and a direction.
+        OpenRAVE::Vector force_direction = traj->GetThresholdForce();
+        OpenRAVE::Vector torque_threshold = traj->GetThresholdTorque();
+        double const force_magnitude = std::sqrt(force_direction.lengthsqr3());
+        force_direction.normalize3();
+
+        RAVELOG_INFO("stopping on force/torque\n");
+        RAVELOG_INFO("force = [ %f %f %f ], magnitude = %f\n", force_direction.x, force_direction.y, force_direction.z, force_magnitude);
+        RAVELOG_INFO("torque = [ %f %f %f ]\n", torque_threshold.x, torque_threshold.y, torque_threshold.z);
+
+        owd_msgs::SetForceInputThresholdRequest ft_request;
+        ft_request.direction.x = force_direction.x;
+        ft_request.direction.y = force_direction.y;
+        ft_request.direction.z = force_direction.z;
+        ft_request.force = force_magnitude;
+        ft_request.torques.x = torque_threshold.x;
+        ft_request.torques.y = torque_threshold.y;
+        ft_request.torques.z = torque_threshold.z;
+
+        owd_msgs::SetForceInputThresholdResponse ft_response;
+        bool success = srv_force_threshold_.call(ft_request, ft_response) && ft_response.ok;
+        if (!success) {
+            throw OPENRAVE_EXCEPTION_FORMAT("Unable to set force/torque threshold: %s",
+                                            ft_response.reason.c_str(), OpenRAVE::ORE_Failed);
+        }
+    }
+
+    // Directly execute the timed trajectory.
     owd_msgs::AddTimedTrajectory::Request request;
     request.SerializedTrajectory = traj->SerializeForOWD();
     request.options = traj->GetExecutionFlags();
