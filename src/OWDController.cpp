@@ -302,6 +302,21 @@ bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr tr
 
 bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConstPtr traj)
 {
+    // Check if this trajectory includes this controller's DOFs.
+    std::vector<int> traj_dof_indices, executing_dofs;
+    traj->GetDOFIndices(traj_dof_indices);
+    std::set_intersection(dof_indices_.begin(), dof_indices_.end(),
+                          traj_dof_indices.begin(), traj_dof_indices.end(),
+                          executing_dofs.begin());
+
+    if (executing_dofs.empty()) {
+        RAVELOG_DEBUG("Skipping TimedTrajectory that contains not controlled DOFs.\n");
+        return true;
+    } else if (executing_dofs.size() != dof_indices_.size()) {
+        throw OpenRAVE::openrave_exception("Executing partial DOF trajectories is not supported.",
+                                           OpenRAVE::ORE_InvalidArguments);
+    }
+
     // Set the force/torque threshold for guarded moves.
     if (traj->GetExecutionFlags() & owd_msgs::JointTraj::opt_CancelOnForceInput) {
         // Split the force vector into a magnitude and a direction.
