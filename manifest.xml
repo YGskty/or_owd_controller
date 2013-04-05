@@ -7,6 +7,7 @@
     <depend package="rosconsole"/>
     <depend package="openrave"/>
     <depend package="owd_msgs"/>
+    <depend package="or_mac_trajectory"/>
     <export>
         <openrave plugins="${prefix}/lib"/>
     </export>

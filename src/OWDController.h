@@ -39,6 +39,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ros/ros.h>
 #include <ros/callback_queue.h>
 #include <owd_msgs/AddTrajectory.h>
+#include <owd_msgs/AddTimedTrajectory.h>
 #include <owd_msgs/DeleteTrajectory.h>
 #include <owd_msgs/WAMState.h>
 #include <owd_msgs/Servo.h>
@@ -46,6 +47,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <owd_msgs/SetStiffness.h>
 #include <owd_msgs/SetSpeed.h>
 #include <openrave/openrave.h>
+#include <or_mac_trajectory/MacTrajectory.h>
 
 class OWDController : public OpenRAVE::ControllerBase {
 public:
@@ -64,7 +66,10 @@ public:
 
     virtual bool SetDesired(std::vector<OpenRAVE::dReal> const &values,
                             OpenRAVE::TransformConstPtr transform = OpenRAVE::TransformConstPtr());
+
     virtual bool SetPath(OpenRAVE::TrajectoryBaseConstPtr traj);
+    virtual bool ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj);
+    virtual bool ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConstPtr traj);
     
 
 private:
@@ -78,6 +83,7 @@ private:
     ros::Subscriber sub_wamstate_;
     ros::Publisher pub_servo_;
     ros::ServiceClient srv_add_traj_;
+    ros::ServiceClient srv_add_timed_traj_;
     ros::ServiceClient srv_delete_traj_;
     ros::ServiceClient srv_set_stiffness_;
     ros::ServiceClient srv_force_threshold_;

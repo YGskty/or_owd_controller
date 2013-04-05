@@ -71,6 +71,7 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     sub_wamstate_ = nh_owd.subscribe("wamstate", 1, &OWDController::wamstateCallback, this);
     pub_servo_ = nh_owd.advertise<owd_msgs::Servo>("wamservo", 1);
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
+    srv_add_timed_traj_ = nh_owd.serviceClient<owd_msgs::AddTimedTrajectory>("AddTimedTrajectory");
     srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
     srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
     srv_set_speed_ = nh_owd.serviceClient<owd_msgs::SetSpeed>("SetSpeed");
@@ -177,6 +178,18 @@ bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
+    or_mac_trajectory::MacTrajectoryConstPtr mac_traj = boost::dynamic_pointer_cast<or_mac_trajectory::MacTrajectory const>(traj);
+    if (mac_traj) {
+        RAVELOG_INFO("Executing timed trajectory.\n");
+        return ExecuteTimedTrajectory(mac_traj);
+    } else {
+        RAVELOG_INFO("Executing generic trajectory.\n");
+        return ExecuteGenericTrajectory(traj);
+    }
+}
+
+bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj)
+{
     // OpenRAVE sends a NULL trajectory when you click on the robot.
     if (!traj) {
         return true;
@@ -281,6 +294,24 @@ bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
     } else {
         RAVELOG_ERROR("Adding the trajectory to OWD failed with an unknown error.\n");
         return false;
+    }
+    execution_time_ = ros::Time::now();
+    status_cleared_ = false;
+    return true;
+}
+
+bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConstPtr traj)
+{
+    owd_msgs::AddTimedTrajectory::Request request;
+    request.SerializedTrajectory = traj->SerializeForOWD();
+    request.options = traj->GetExecutionFlags();
+    request.id = traj->GetTrajectoryID();
+
+    owd_msgs::AddTimedTrajectory::Response response;
+    bool const success = srv_add_timed_traj_.call(request, response);
+    if (!success || !response.ok) {
+        throw OPENRAVE_EXCEPTION_FORMAT("Adding a timed trajectory failed: %s",
+                                        response.reason.c_str(), OpenRAVE::ORE_Failed);
     }
     execution_time_ = ros::Time::now();
     status_cleared_ = false;
@@ -452,6 +483,7 @@ bool OWDController::getStatusCommand(std::ostream &out, std::istream &in)
 bool OWDController::clearStatusCommand(std::ostream &out, std::istream &in)
 {
     status_cleared_ = true;
+    return true;
 }
 
 int OWDController::parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj)
