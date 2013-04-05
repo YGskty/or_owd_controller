@@ -312,8 +312,10 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     if (executing_dofs.empty()) {
         RAVELOG_DEBUG("Skipping TimedTrajectory that contains not controlled DOFs.\n");
         return true;
-    } else if (executing_dofs.size() != dof_indices_.size()) {
-        throw OpenRAVE::openrave_exception("Executing partial DOF trajectories is not supported.",
+    }
+    // Verify that all of the controlled joints are included in the trajectory.
+    else if (executing_dofs.size() != dof_indices_.size()) {
+        throw OpenRAVE::openrave_exception("Partial controller DOF trajectories are not supported.",
                                            OpenRAVE::ORE_InvalidArguments);
     }
 
@@ -346,9 +348,26 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
         }
     }
 
+    // Execute a synchronized full DOF trajectory.
+    std::string serialized_trajectory;
+    if (traj->GetExecutionFlags() & owd_msgs::JointTraj::opt_Synchronize) {
+        if (executing_dofs.size() != static_cast<size_t>(robot_->GetDOF())) {
+            throw OpenRAVE::openrave_exception("Synchronized trajectories must be full DOF.",
+                                               OpenRAVE::ORE_InvalidArguments);
+        }
+        // TODO: Split out the relevant DOFs.
+        throw OpenRAVE::openrave_exception("Synchronized trajectories are not implemented.",
+                                           OpenRAVE::ORE_NotImplemented);
+    }
+    // Unsynchronized single controller trajectory.
+    else {
+        serialized_trajectory = traj->SerializeForOWD();
+        RAVELOG_DEBUG("Executing an unsynchronized trajectory.\n");
+    }
+        
     // Directly execute the timed trajectory.
     owd_msgs::AddTimedTrajectory::Request request;
-    request.SerializedTrajectory = traj->SerializeForOWD();
+    request.SerializedTrajectory = serialized_trajectory;
     request.options = traj->GetExecutionFlags();
     request.id = traj->GetTrajectoryID();
 
