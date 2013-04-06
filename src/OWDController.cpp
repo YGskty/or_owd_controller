@@ -325,15 +325,18 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     RAVELOG_DEBUG("Trajectory DOFs = %s\n", traj_stream.str().c_str());
     RAVELOG_DEBUG("Executing DOFs = %s\n", executing_stream.str().c_str());
 
-    if (executing_dofs.empty()) {
+    uint32_t const synchronized = traj->GetExecutionFlags() & owd_msgs::JointTraj::opt_Synchronize;
+    if (executing_dofs.empty() && !synchronized) {
         RAVELOG_DEBUG("Skipping TimedTrajectory that contains not controlled DOFs.\n");
         return true;
     }
+#if 0
     // Verify that all of the controlled joints are included in the trajectory.
     else if (executing_dofs.size() != dof_indices_.size()) {
         throw OpenRAVE::openrave_exception("Partial controller DOF trajectories are not supported.",
                                            OpenRAVE::ORE_InvalidArguments);
     }
+#endif
 
     // Set the force/torque threshold for guarded moves.
     if (traj->GetExecutionFlags() & owd_msgs::JointTraj::opt_CancelOnForceInput) {
@@ -364,11 +367,19 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
         }
     }
 
+    // Extract the timed MacJointTraj from the OpenRAVE trajectory.
+    boost::shared_ptr<OWD::MacJointTraj> mac_traj = boost::const_pointer_cast<OWD::MacJointTraj>(traj->GetOWDTrajectory());
+    if (!mac_traj) {
+        throw OpenRAVE::openrave_exception("Unable to execute an untimed MacTrajectory.",
+                                           OpenRAVE::ORE_Failed);
+    }
+
     // Execute a synchronized full DOF trajectory.
     size_t index_min = 0;
     size_t index_max = 0;
-    if (traj->GetExecutionFlags() & owd_msgs::JointTraj::opt_Synchronize) {
-        if (traj_dof_indices.size() != static_cast<size_t>(robot_->GetDOF())) {
+    if (synchronized) {
+        size_t const num_mac_dof = mac_traj->start_position.size();
+        if (num_mac_dof != static_cast<size_t>(robot_->GetDOF())) {
             throw OpenRAVE::openrave_exception("Synchronized trajectories must be full DOF.",
                                                OpenRAVE::ORE_InvalidArguments);
         }
@@ -390,7 +401,6 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     );
 
     // Extract this arm's DOFs from the full trajectory.
-    boost::shared_ptr<OWD::MacJointTraj> mac_traj = boost::const_pointer_cast<OWD::MacJointTraj>(traj->GetOWDTrajectory());
     BinaryData serialized_trajectory;
     try {
         serialized_trajectory.PutInt(OWD::Trajectory::TRAJTYPE_MACJOINTTRAJ);
