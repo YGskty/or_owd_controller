@@ -94,6 +94,8 @@ void BHController::Reset(int options)
 {
     current_bhstate_ = owd_msgs::BHState::ConstPtr();
 
+    // TODO: Move this to a SendCommand.
+#if 0
     owd_msgs::ResetHand::Request request;
     owd_msgs::ResetHand::Response response;
     bool const success = srv_reset_.call(request, response) && response.ok;
@@ -102,6 +104,7 @@ void BHController::Reset(int options)
     } else if (!success) {
         RAVELOG_ERROR("Resetting hand failed.\n");
     }
+#endif
 }
 
 bool BHController::IsDone(void)

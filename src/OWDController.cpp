@@ -33,6 +33,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * \author Michael Koval
  * \date 2012
  */
+#include <boost/foreach.hpp>
 #include "OWDController.h"
 
 OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const &ns)
@@ -307,7 +308,22 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     traj->GetDOFIndices(traj_dof_indices);
     std::set_intersection(dof_indices_.begin(), dof_indices_.end(),
                           traj_dof_indices.begin(), traj_dof_indices.end(),
-                          executing_dofs.begin());
+                          std::back_inserter(executing_dofs));
+
+    // Debug information.
+    std::stringstream controller_stream, traj_stream, executing_stream;
+    controller_stream << "[";
+    traj_stream << "[";
+    executing_stream << "[";
+    BOOST_FOREACH (int const index, dof_indices_) { controller_stream << " " << index; }
+    BOOST_FOREACH (int const index, traj_dof_indices) { traj_stream << " " << index; }
+    BOOST_FOREACH (int const index, executing_dofs) { executing_stream << " " << index; }
+    controller_stream << "]";
+    traj_stream << "]";
+    executing_stream << "]";
+    RAVELOG_DEBUG("Controlled DOFs = %s\n", controller_stream.str().c_str());
+    RAVELOG_DEBUG("Trajectory DOFs = %s\n", traj_stream.str().c_str());
+    RAVELOG_DEBUG("Executing DOFs = %s\n", executing_stream.str().c_str());
 
     if (executing_dofs.empty()) {
         RAVELOG_DEBUG("Skipping TimedTrajectory that contains not controlled DOFs.\n");
@@ -349,20 +365,39 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     }
 
     // Execute a synchronized full DOF trajectory.
-    std::string serialized_trajectory;
+    size_t index_min = 0;
+    size_t index_max = 0;
     if (traj->GetExecutionFlags() & owd_msgs::JointTraj::opt_Synchronize) {
-        if (executing_dofs.size() != static_cast<size_t>(robot_->GetDOF())) {
+        if (traj_dof_indices.size() != static_cast<size_t>(robot_->GetDOF())) {
             throw OpenRAVE::openrave_exception("Synchronized trajectories must be full DOF.",
                                                OpenRAVE::ORE_InvalidArguments);
         }
-        // TODO: Split out the relevant DOFs.
-        throw OpenRAVE::openrave_exception("Synchronized trajectories are not implemented.",
-                                           OpenRAVE::ORE_NotImplemented);
+
+        // Extract the correct DOFs from the trajectory.
+        // FIXME: This assumes that traj_dof_indices is sorted.
+        index_min = dof_indices_.front();
+        index_max = dof_indices_.back();
+        RAVELOG_DEBUG("Executing a synchronized trajectory.\n");
     }
     // Unsynchronized single controller trajectory.
     else {
-        serialized_trajectory = traj->SerializeForOWD();
+        index_min = 0;
+        index_max = traj_dof_indices.size() - 1;
         RAVELOG_DEBUG("Executing an unsynchronized trajectory.\n");
+    }
+    RAVELOG_DEBUG("Extracting DOFs %d-%d from the MacJointTraj.\n",
+        static_cast<int>(index_min), static_cast<int>(index_max)
+    );
+
+    // Extract this arm's DOFs from the full trajectory.
+    boost::shared_ptr<OWD::MacJointTraj> mac_traj = boost::const_pointer_cast<OWD::MacJointTraj>(traj->GetOWDTrajectory());
+    BinaryData serialized_trajectory;
+    try {
+        serialized_trajectory.PutInt(OWD::Trajectory::TRAJTYPE_MACJOINTTRAJ);
+        serialized_trajectory.PutString(mac_traj->serialize(index_min, index_max));
+    } catch (char const *error_message) {
+        throw OPENRAVE_EXCEPTION_FORMAT("Failed serializing MacJointTraj: %s",
+                                        error_message, OpenRAVE::ORE_Failed);
     }
         
     // Directly execute the timed trajectory.
