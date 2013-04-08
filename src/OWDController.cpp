@@ -73,7 +73,7 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     pub_servo_ = nh_owd.advertise<owd_msgs::Servo>("wamservo", 1);
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
     srv_add_timed_traj_ = nh_owd.serviceClient<owd_msgs::AddTimedTrajectory>("AddTimedTrajectory");
-    srv_delete_traj_ = nh_owd.serviceClient<owd_msgs::DeleteTrajectory>("DeleteTrajectory");
+    srv_cancel_all_traj_ = nh_owd.serviceClient<owd_msgs::CancelAllTrajectories>("CancelAllTrajectories");
     srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
     srv_set_speed_ = nh_owd.serviceClient<owd_msgs::SetSpeed>("SetSpeed");
     srv_force_threshold_ = nh_owd.serviceClient<owd_msgs::SetForceInputThreshold>("SetForceInputThreshold");
@@ -114,37 +114,36 @@ void OWDController::Reset(int options)
 {
     current_wamstate_ = owd_msgs::WAMState::ConstPtr();
 
-    // Attempt to cancel the current trajectory.
-    if (!traj_id_.empty()) {
-        owd_msgs::DeleteTrajectory msg_delete;
-        msg_delete.request.ids.push_back(traj_id_);
-
-        bool const success = srv_delete_traj_.call(msg_delete) && msg_delete.response.ok;
-        if (!success && !msg_delete.response.reason.empty()) {
-            RAVELOG_ERROR("Deleting the trajectory '%s' from OWD failed: %s\n",
-                traj_id_.c_str(), msg_delete.response.reason.c_str()
-            );
-        } else if (!success) {
-            RAVELOG_ERROR("Deleting the trajectory '%s' from OWD failed with an unknown error.\n",
-                traj_id_.c_str()
-            );
-        }
+    // Attempt to cancel all trajectories
+    owd_msgs::CancelAllTrajectories msg_cancel_all;
+    
+    bool const success = srv_cancel_all_traj_.call(msg_cancel_all) && msg_cancel_all.response.ok;
+    if (!success) {
+      RAVELOG_ERROR("Cancelling all OWD trajectories failed: %s\n",
+                    msg_cancel_all.response.reason.c_str()
+                    );
     }
 }
 
 bool OWDController::IsDone(void)
 {
-    // Check if we're still waiting for the arm to move.
+    if (!current_wamstate_) {
+        throw OpenRAVE::openrave_exception("Have not received any wamstate messages from OWD",
+                                           OpenRAVE::ORE_InvalidState);
+    }
+    // Check if we still don't have a recent enough wamstate
     if (current_wamstate_->header.stamp <= execution_time_) {
         return false;
-    } else if (force_done_) {
-        return true;
-    } else if (waiting_for_start_) {
+    }
+
+    // Check to see if there are still any trajectories running
+    if (current_wamstate_->trajectory_queue.size() > 0) {
         return false;
     }
-    return !current_wamstate_ || (current_wamstate_->state != owd_msgs::WAMState::state_traj_active
-                              &&  current_wamstate_->state != owd_msgs::WAMState::state_traj_stalled
-                              &&  current_wamstate_->state != owd_msgs::WAMState::state_traj_paused);
+
+    // Check to make sure the arm is not being moved by Servo commands
+    return current_wamstate_->state != owd_msgs::WAMState::state_traj_active;
+    
 }
 
 OpenRAVE::RobotBasePtr OWDController::GetRobot(void) const
@@ -301,9 +300,6 @@ bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr tr
     }
     execution_time_ = ros::Time::now();
     status_cleared_ = false;
-    traj_id_ = response.id;
-    waiting_for_start_ = true;
-    force_done_ = false;
     return true;
 }
 
@@ -439,9 +435,6 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     }
     execution_time_ = ros::Time::now();
     status_cleared_ = false;
-    traj_id_ = request.id;
-    waiting_for_start_ = true;
-    force_done_ = false;
     return true;
 }
 
@@ -572,14 +565,6 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
             static_cast<int>(dof_indices_.size())
         );
         return;
-    }
-
-    // Check if our trajectory is executing and set a flag to indicate so
-    if (!new_wamstate->trajectory_queue.empty()
-	&& new_wamstate->trajectory_queue[0].id == traj_id_) {
-        waiting_for_start_ = false;
-    }else if (new_wamstate->prev_trajectory.id == traj_id_) {
-        force_done_ = true;
     }
 
     current_wamstate_ = new_wamstate;

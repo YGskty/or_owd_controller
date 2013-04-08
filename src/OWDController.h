@@ -40,7 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ros/callback_queue.h>
 #include <owd_msgs/AddTrajectory.h>
 #include <owd_msgs/AddTimedTrajectory.h>
-#include <owd_msgs/DeleteTrajectory.h>
+#include <owd_msgs/CancelAllTrajectories.h>
 #include <owd_msgs/WAMState.h>
 #include <owd_msgs/Servo.h>
 #include <owd_msgs/SetForceInputThreshold.h>
@@ -75,18 +75,15 @@ public:
 private:
     bool initialized_;
     bool status_cleared_;
-    bool waiting_for_start_;
-    bool force_done_;
     ros::Time execution_time_;
     std::string owd_ns_;
-    std::string traj_id_;
     ros::NodeHandle nh_;
     ros::CallbackQueue queue_;
     ros::Subscriber sub_wamstate_;
     ros::Publisher pub_servo_;
     ros::ServiceClient srv_add_traj_;
     ros::ServiceClient srv_add_timed_traj_;
-    ros::ServiceClient srv_delete_traj_;
+    ros::ServiceClient srv_cancel_all_traj_;
     ros::ServiceClient srv_set_stiffness_;
     ros::ServiceClient srv_force_threshold_;
     ros::ServiceClient srv_set_speed_;
