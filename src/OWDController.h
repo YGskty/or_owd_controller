@@ -75,6 +75,8 @@ public:
 private:
     bool initialized_;
     bool status_cleared_;
+    bool waiting_for_start_;
+    bool force_done_;
     ros::Time execution_time_;
     std::string owd_ns_;
     std::string traj_id_;

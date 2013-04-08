@@ -137,6 +137,10 @@ bool OWDController::IsDone(void)
     // Check if we're still waiting for the arm to move.
     if (current_wamstate_->header.stamp <= execution_time_) {
         return false;
+    } else if (force_done_) {
+        return true;
+    } else if (waiting_for_start_) {
+        return false;
     }
     return !current_wamstate_ || (current_wamstate_->state != owd_msgs::WAMState::state_traj_active
                               &&  current_wamstate_->state != owd_msgs::WAMState::state_traj_stalled
@@ -288,7 +292,6 @@ bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr tr
     bool const success = srv_add_traj_.call(request, response) && response.ok;
     if (success) {
         RAVELOG_DEBUG("Successfully added the trajectory to OWD.\n");
-        traj_id_ = response.id;
     } else if (!response.reason.empty()) {
         RAVELOG_ERROR("Adding the trajectory to OWD failed with error: %s\n", response.reason.c_str());
         return false;
@@ -298,6 +301,9 @@ bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr tr
     }
     execution_time_ = ros::Time::now();
     status_cleared_ = false;
+    traj_id_ = response.id;
+    waiting_for_start_ = true;
+    force_done_ = false;
     return true;
 }
 
@@ -400,6 +406,19 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
         static_cast<int>(index_min), static_cast<int>(index_max)
     );
 
+    {
+      std::ofstream trajstream("/tmp/macjointtraj.bin", std::ios::out | std::ios::binary);
+      BinaryData full_trajectory;
+      try {
+          full_trajectory.PutInt(OWD::Trajectory::TRAJTYPE_MACJOINTTRAJ);
+          full_trajectory.PutString(mac_traj->serialize(0, mac_traj->macpieces.size()-1)); 
+	  trajstream << std::string(full_trajectory);
+      } catch (char const *error_message) {
+	  RAVELOG_WARN("Failed serializing MacJointTraj: %s\n", error_message);
+      }
+    }
+    
+
     // Extract this arm's DOFs from the full trajectory.
     BinaryData serialized_trajectory;
     try {
@@ -424,6 +443,9 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     }
     execution_time_ = ros::Time::now();
     status_cleared_ = false;
+    traj_id_ = request.id;
+    waiting_for_start_ = true;
+    force_done_ = false;
     return true;
 }
 
@@ -555,6 +577,15 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
         );
         return;
     }
+
+    // Check if our trajectory is executing and set a flag to indicate so
+    if (!new_wamstate->trajectory_queue.empty()
+	&& new_wamstate->trajectory_queue[0].id == traj_id_) {
+        waiting_for_start_ = false;
+    }else if (new_wamstate->prev_trajectory.id == traj_id_) {
+        force_done_ = true;
+    }
+
     current_wamstate_ = new_wamstate;
 }
 
@@ -566,6 +597,11 @@ bool OWDController::getStatusCommand(std::ostream &out, std::istream &in)
     }else if(status_cleared_) {
         out << "cleared";
 	return true;
+    }
+
+    if (current_wamstate_->state == owd_msgs::WAMState::state_traj_stalled) {
+        out << "stalled"; 
+        return true;
     }
 
     uint8_t const state = current_wamstate_->prev_trajectory.state;
