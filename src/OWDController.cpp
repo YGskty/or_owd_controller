@@ -407,17 +407,13 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     );
 
     {
-      std::ofstream trajstream("/tmp/macjointtraj.bin", std::ios::out | std::ios::binary);
-      BinaryData full_trajectory;
-      try {
-          full_trajectory.PutInt(OWD::Trajectory::TRAJTYPE_MACJOINTTRAJ);
-          full_trajectory.PutString(mac_traj->serialize(0, mac_traj->macpieces.size()-1)); 
-	  trajstream << std::string(full_trajectory);
-      } catch (char const *error_message) {
-	  RAVELOG_WARN("Failed serializing MacJointTraj: %s\n", error_message);
-      }
+        std::ofstream trajstream("/tmp/macjointtraj.bin", std::ios::out | std::ios::binary);
+        try {
+            trajstream << mac_traj->serialize();
+        } catch (char const *error_message) {
+            RAVELOG_WARN("Failed serializing MacJointTraj: %s\n", error_message);
+        }
     }
-    
 
     // Extract this arm's DOFs from the full trajectory.
     BinaryData serialized_trajectory;
