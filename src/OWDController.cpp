@@ -127,6 +127,7 @@ void OWDController::Reset(int options)
 
 bool OWDController::IsDone(void)
 {
+    OpenRAVE::EnvironmentMutex::scoped_lock lock(robot_->GetEnv()->GetMutex());
     if (!current_wamstate_) {
         throw OpenRAVE::openrave_exception("Have not received any wamstate messages from OWD",
                                            OpenRAVE::ORE_InvalidState);
