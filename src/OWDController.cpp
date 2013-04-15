@@ -102,11 +102,11 @@ void OWDController::SimulationStep(OpenRAVE::dReal time_ellapsed)
             }
         }
 
-        // This prevents OpenRAVE from spamming "DOF is not in limits" warnings.
-        int const debug_level = OpenRAVE::RaveGetDebugLevel();
-        OpenRAVE::RaveSetDebugLevel(OpenRAVE::Level_Fatal);
-        robot_->SetDOFValues(dof_values);
-        OpenRAVE::RaveSetDebugLevel(debug_level);
+        // Set the actual DOF values, even if they violate joint limits. This
+        // prevents SetDOFValues from clamping the joint values to the
+        // conservative OpenRAVE joint limits. This could potentially cause
+        // trajectory execution values in OWD.
+        robot_->SetDOFValues(dof_values, OpenRAVE::KinBody::CLA_Nothing);
     }
 }
 
