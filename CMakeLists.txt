@@ -25,3 +25,9 @@ rosbuild_add_library(owdcontroller
     src/OWDController.cpp
     src/OWDControllerPlugin.cpp
 )
+
+rosbuild_add_library(bhtactilesensor
+    src/BHTactileSensor.cpp
+    src/BHTactileSensorPlugin.cpp
+)
+target_link_libraries(bhtactilesensor yaml-cpp)

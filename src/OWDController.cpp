@@ -556,7 +556,7 @@ void OWDController::wamstateCallback(owd_msgs::WAMState::ConstPtr const &new_wam
 {
     // Verify that we received the WAMState messages in sequential order.
     if (current_wamstate_ && new_wamstate->header.stamp < current_wamstate_->header.stamp) {
-        RAVELOG_WARN("Received WAMState message with an out-of-order timestamp.\n");
+        //RAVELOG_WARN("Received WAMState message with an out-of-order timestamp.\n");
         return;
     }
     // Verify that the message contains the correct number of DOFs.
