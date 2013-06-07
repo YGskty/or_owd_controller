@@ -299,7 +299,7 @@ bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr tr
         RAVELOG_ERROR("Adding the trajectory to OWD failed with an unknown error.\n");
         return false;
     }
-    execution_time_ = ros::Time::now();
+    execution_time_ = response.time_added;
     status_cleared_ = false;
     return true;
 }
@@ -434,7 +434,7 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
         throw OPENRAVE_EXCEPTION_FORMAT("Adding a timed trajectory failed: %s",
                                         response.reason.c_str(), OpenRAVE::ORE_Failed);
     }
-    execution_time_ = ros::Time::now();
+    execution_time_ = response.time_added;
     status_cleared_ = false;
     return true;
 }
