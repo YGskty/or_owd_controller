@@ -42,6 +42,8 @@ BHController::BHController(OpenRAVE::EnvironmentBasePtr env, std::string const &
 {
     RegisterCommand("WaitForUpdate", boost::bind(&BHController::waitForUpdate, this, _1, _2),
                     "Block for an update.");
+    RegisterCommand("ResetHand", boost::bind(&BHController::resetHand, this, _1, _2),
+                    "Send a reset command to the hand.");
 }
 
 bool BHController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &dof_indices, int ctrl_transform)
@@ -178,6 +180,20 @@ bool BHController::waitForUpdate(std::ostream &out, std::istream &in)
     SimulationStep(0);
     RAVELOG_DEBUG("Received BHState message. Initialization is complete.\n");
     return true;
+}
+
+bool BHController::resetHand(std::ostream &out, std::istream &in)
+{
+
+    //Send a request to reset the hand
+    owd_msgs::ResetHand::Request request;
+    owd_msgs::ResetHand::Response response;
+    bool const success = srv_reset_.call(request, response) && response.ok;
+    if (!success && !response.reason.empty()) {
+        RAVELOG_ERROR("Resetting hand failed: %s\n", response.reason.c_str());
+    } else if (!success) {
+        RAVELOG_ERROR("Resetting hand failed.\n");
+    }
 }
 
 void BHController::bhstateCallback(owd_msgs::BHState::ConstPtr const &new_bhstate)
