@@ -3,6 +3,7 @@
         OpenRAVE controller for interfacing with OWD.
     </description>
     <author>Michael Koval</author>
+    <review status="released" notes="approved on 3/13"/>
     <rosdep name="yamlcpp"/>
     <depend package="roscpp"/>
     <depend package="roslib"/>
