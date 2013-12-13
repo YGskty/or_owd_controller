@@ -83,12 +83,11 @@ void BHController::SimulationStep(OpenRAVE::dReal time_ellapsed)
             dof_values[dof_index] = current_bhstate_->positions[index];
         }
 
-
-        // This prevents OpenRAVE from spamming "DOF is not in limits" warnings.
-        int const debug_level = OpenRAVE::RaveGetDebugLevel();
-        OpenRAVE::RaveSetDebugLevel(OpenRAVE::Level_Fatal);
-        robot_->SetDOFValues(dof_values);
-        OpenRAVE::RaveSetDebugLevel(debug_level);
+        // Set the actual DOF values, even if they violate joint limits. This
+        // prevents SetDOFValues from clamping the joint values to the
+        // conservative OpenRAVE joint limits. This could potentially cause
+        // trajectory execution values in OWD.
+        robot_->SetDOFValues(dof_values, OpenRAVE::KinBody::CLA_Nothing);
     }
 }
 
@@ -194,6 +193,7 @@ bool BHController::resetHand(std::ostream &out, std::istream &in)
     } else if (!success) {
         RAVELOG_ERROR("Resetting hand failed.\n");
     }
+    return success;
 }
 
 void BHController::bhstateCallback(owd_msgs::BHState::ConstPtr const &new_bhstate)
