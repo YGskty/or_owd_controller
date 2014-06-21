@@ -25,6 +25,7 @@ add_definitions(-DNO_MAC_TRAJECTORY)
 add_library(${PROJECT_NAME}_plugin
     src/BHController.cpp
     src/BHTactileSensor.cpp
+    src/BarrettFTSensor.cpp
     src/HandstateSensor.cpp
     src/OWDController.cpp
     src/AllOWDPlugins.cpp
