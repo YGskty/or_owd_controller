@@ -183,11 +183,14 @@ bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
+#ifndef NO_MAC_TRAJECTORY
     or_mac_trajectory::MacTrajectoryConstPtr mac_traj = boost::dynamic_pointer_cast<or_mac_trajectory::MacTrajectory const>(traj);
     if (mac_traj) {
         RAVELOG_INFO("Executing timed trajectory.\n");
         return ExecuteTimedTrajectory(mac_traj);
-    } else {
+    } else
+#endif
+    {
         RAVELOG_INFO("Executing generic trajectory.\n");
         return ExecuteGenericTrajectory(traj);
     }
@@ -304,6 +307,7 @@ bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr tr
     return true;
 }
 
+#ifndef NO_MAC_TRAJECTORY
 bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConstPtr traj)
 {
     // Check if this trajectory includes this controller's DOFs.
@@ -438,6 +442,7 @@ bool OWDController::ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConst
     status_cleared_ = false;
     return true;
 }
+#endif
 
 bool OWDController::waitForUpdate(std::ostream &out, std::istream &in)
 {

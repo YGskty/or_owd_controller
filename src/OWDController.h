@@ -47,7 +47,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <owd_msgs/SetStiffness.h>
 #include <owd_msgs/SetSpeed.h>
 #include <openrave/openrave.h>
+#ifndef NO_MAC_TRAJECTORY
 #include <or_mac_trajectory/MacTrajectory.h>
+#endif
 
 class OWDController : public OpenRAVE::ControllerBase {
 public:
@@ -69,8 +71,9 @@ public:
 
     virtual bool SetPath(OpenRAVE::TrajectoryBaseConstPtr traj);
     virtual bool ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj);
+#ifndef NO_MAC_TRAJECTORY
     virtual bool ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConstPtr traj);
-    
+#endif
 
 private:
     bool initialized_;
