@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ros/ros.h>
 #include "BHController.h"
 #include "BHTactileSensor.h"
+#include "HandstateSensor.h"
 #include "OWDController.h"
 
 void GetPluginAttributesValidated(OpenRAVE::PLUGININFO &info)
@@ -41,6 +42,7 @@ void GetPluginAttributesValidated(OpenRAVE::PLUGININFO &info)
     info.interfacenames[OpenRAVE::PT_Controller].push_back("BHController");
     info.interfacenames[OpenRAVE::PT_Controller].push_back("OWDController");
     info.interfacenames[OpenRAVE::PT_Sensor].push_back("BHTactileSensor");
+    info.interfacenames[OpenRAVE::PT_Sensor].push_back("HandstateSensor");
 }
 
 OpenRAVE::InterfaceBasePtr CreateInterfaceValidated(OpenRAVE::InterfaceType type,
@@ -50,7 +52,7 @@ OpenRAVE::InterfaceBasePtr CreateInterfaceValidated(OpenRAVE::InterfaceType type
 
     // Initialize the ROS node.
     if (interface_name == "owdcontroller" || interface_name == "bhcontroller"
-     || interface_name == "bhtacitlesensor")
+     || interface_name == "bhtacitlesensor" || interface_name == "handstatesensor")
     {
         sinput >> node_name >> owd_namespace;
 
@@ -87,6 +89,8 @@ OpenRAVE::InterfaceBasePtr CreateInterfaceValidated(OpenRAVE::InterfaceType type
         }
         return boost::make_shared<BHTactileSensor>(env, robot, owd_namespace,
                                                    link_prefix);
+    } else if (type == OpenRAVE::PT_Sensor && interface_name == "Handstatesensor") {
+        return boost::make_shared<HandstateSensor>(env, owd_namespace);
     } else {
         throw OpenRAVE::openrave_exception("This should never happen.");
     }
