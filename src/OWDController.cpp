@@ -72,6 +72,7 @@ bool OWDController::Init(OpenRAVE::RobotBasePtr robot, std::vector<int> const &d
     sub_wamstate_ = nh_owd.subscribe("wamstate", 1, &OWDController::wamstateCallback, this);
     pub_servo_ = nh_owd.advertise<owd_msgs::Servo>("wamservo", 1);
     srv_add_traj_ = nh_owd.serviceClient<owd_msgs::AddTrajectory>("AddTrajectory");
+    srv_add_or_traj_ = nh_owd.serviceClient<owd_msgs::AddOrTrajectory>("AddOrTrajectory");
     srv_add_timed_traj_ = nh_owd.serviceClient<owd_msgs::AddTimedTrajectory>("AddTimedTrajectory");
     srv_cancel_all_traj_ = nh_owd.serviceClient<owd_msgs::CancelAllTrajectories>("CancelAllTrajectories");
     srv_set_stiffness_ = nh_owd.serviceClient<owd_msgs::SetStiffness>("SetStiffness");
@@ -183,26 +184,78 @@ bool OWDController::SetDesired(std::vector<OpenRAVE::dReal> const &values,
 
 bool OWDController::SetPath(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
-#ifndef NO_MAC_TRAJECTORY
-    or_mac_trajectory::MacTrajectoryConstPtr mac_traj = boost::dynamic_pointer_cast<or_mac_trajectory::MacTrajectory const>(traj);
-    if (mac_traj) {
-        RAVELOG_INFO("Executing timed trajectory.\n");
-        return ExecuteTimedTrajectory(mac_traj);
-    } else
-#endif
-    {
-        RAVELOG_INFO("Executing generic trajectory.\n");
-        return ExecuteGenericTrajectory(traj);
-    }
-}
-
-bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj)
-{
     // OpenRAVE sends a NULL trajectory when you click on the robot.
     if (!traj) {
         return true;
     }
 
+    // If we have or_mac_trajectory and the trajectory is of the correct type,
+    // then we'll directly forward the binary blob to OWD.
+#ifndef NO_MAC_TRAJECTORY
+    or_mac_trajectory::MacTrajectoryConstPtr mac_traj = boost::dynamic_pointer_cast<or_mac_trajectory::MacTrajectory const>(traj);
+    if (mac_traj) {
+        RAVELOG_DEBUG("Executing timed trajectory.\n");
+        return ExecuteTimedTrajectory(mac_traj);
+    } else
+#endif
+    {
+        // Check whether the trajectory has a deltatime group.
+        OpenRAVE::ConfigurationSpecification const cspec
+            = traj->GetConfigurationSpecification();
+        std::vector<OpenRAVE::dReal> waypoint(cspec.GetDOF());
+        OpenRAVE::dReal placeholder;
+
+        bool const has_deltatime = cspec.ExtractDeltaTime(
+            placeholder, waypoint.begin());
+
+        // If the trajectory is timed, then we'll execute it with owd_ortraj.
+        if (has_deltatime) {
+            RAVELOG_DEBUG("Executing owd_ortraj trajectory.\n");
+            return ExecuteORTrajectory(traj);
+        }
+        // Otherwise, we'll let OWD do the timing itself.
+        else {
+            RAVELOG_DEBUG("Executing generic trajectory.\n");
+            return ExecuteGenericTrajectory(traj);
+        }
+    }
+}
+
+bool OWDController::ExecuteORTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj)
+{
+    std::stringstream ss;
+    traj->serialize(ss);
+
+    owd_msgs::AddOrTrajectory::Request request;
+    request.id = "";
+    request.traj = ss.str();
+    request.xml_id = traj->GetXMLId();
+
+    // TODO: How do we know whether synchronization is required?
+    request.synchronize = false;
+
+    owd_msgs::AddOrTrajectory::Response response;
+    bool const success = srv_add_or_traj_.call(request, response) && response.ok;
+    if (success) {
+        RAVELOG_DEBUG("Successfully added the trajectory to OWD.\n");
+    } else if (!response.reason.empty()) {
+        RAVELOG_ERROR("Adding the trajectory to OWD failed with error: %s\n", response.reason.c_str());
+        return false;
+    } else {
+        RAVELOG_ERROR("Adding the trajectory to OWD failed with an unknown error.\n");
+        return false;
+    }
+
+    // TODO: We need to add a time_added field to avoid a race condition here.
+    //execution_time_ = response.time_added;
+    execution_time_ = ros::Time::now();
+
+    status_cleared_ = false;
+    return true;
+}
+
+bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj)
+{
     RAVELOG_DEBUG("OWDController::SetPath: Starting.\n");
     size_t const num_waypoints = traj->GetNumWaypoints();
     size_t const num_dofs = dof_indices_.size();
@@ -621,7 +674,7 @@ bool OWDController::clearStatusCommand(std::ostream &out, std::istream &in)
 int OWDController::parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj)
 {
     static std::string const group_prefix = "or_owd_controller";
-    bool stop_on_stall = false;
+    bool stop_on_stall = true;
     bool stop_on_ft = false;
     double force_magnitude = 0.0;
     std::vector<double> force_direction(3);
