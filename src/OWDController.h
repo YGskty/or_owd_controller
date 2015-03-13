@@ -39,6 +39,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ros/ros.h>
 #include <ros/callback_queue.h>
 #include <owd_msgs/AddTrajectory.h>
+#include <owd_msgs/AddOrTrajectory.h>
 #include <owd_msgs/AddTimedTrajectory.h>
 #include <owd_msgs/CancelAllTrajectories.h>
 #include <owd_msgs/WAMState.h>
@@ -71,6 +72,7 @@ public:
 
     virtual bool SetPath(OpenRAVE::TrajectoryBaseConstPtr traj);
     virtual bool ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj);
+    virtual bool ExecuteORTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj);
 #ifndef NO_MAC_TRAJECTORY
     virtual bool ExecuteTimedTrajectory(or_mac_trajectory::MacTrajectoryConstPtr traj);
 #endif
@@ -85,6 +87,7 @@ private:
     ros::Subscriber sub_wamstate_;
     ros::Publisher pub_servo_;
     ros::ServiceClient srv_add_traj_;
+    ros::ServiceClient srv_add_or_traj_;
     ros::ServiceClient srv_add_timed_traj_;
     ros::ServiceClient srv_cancel_all_traj_;
     ros::ServiceClient srv_set_stiffness_;
