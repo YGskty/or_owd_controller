@@ -6,6 +6,13 @@ catkin_package()
 include(FindPkgConfig)
 pkg_check_modules(YamlCpp REQUIRED yaml-cpp)
 
+if (${YamlCpp_VERSION} VERSION_LESS 0.5.0)
+    message(STATUS "Using old yaml-cpp (< 0.5.0) API.")
+else ()
+    add_definitions(-DYAMLCPP_NEWAPI)
+    message(STATUS "Using new yaml-cpp (>= 0.5.0) API.")
+endif ()
+
 include_directories(
     "include/${PROJECT_NAME}"
     ${OpenRAVE_INCLUDE_DIRS}

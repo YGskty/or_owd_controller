@@ -123,17 +123,28 @@ void BHTactileSensor::loadGeometry(std::string const &path, std::string const &l
                                    std::vector<TactileCell> &cells) const
 {
     std::ifstream stream(path.c_str());
-    YAML::Node yaml;
+
+YAML::Node yaml;
+
+#ifdef YAMLCPP_NEWAPI
     try {
         yaml = YAML::Load(stream);
     } catch(YAML::ParserException& e) {
+#else
+    YAML::Parser parser(stream);
+    if (!parser.GetNextDocument(yaml)) {
+#endif
         throw OPENRAVE_EXCEPTION_FORMAT("Unable to load tactile sensor geometry from '%s'.",
                                         path.c_str(), OpenRAVE::ORE_Failed);
     }
 
     for (size_t j = 0; j < yaml.size(); ++j) {
         std::string parent_name;
+#ifdef YAMLCPP_NEWAPI
         parent_name = yaml[j]["parent"].as<std::string>();
+#else
+        yaml[j]["parent"] >> parent_name;
+#endif
         std::string const full_parent_name = link_prefix + parent_name;
 
         OpenRAVE::RobotBase::LinkPtr parent = robot_->GetLink(full_parent_name);
@@ -151,12 +162,21 @@ void BHTactileSensor::loadGeometry(std::string const &path, std::string const &l
 
             TactileCell cell;
             cell.parent = parent;
+#ifdef YAMLCPP_NEWAPI 
             cell.position[0] = position_yaml[0].as<double>();
             cell.position[1] = position_yaml[1].as<double>();
             cell.position[2] = position_yaml[2].as<double>();
             cell.normal[0] = normal_yaml[0].as<double>();
             cell.normal[1] = normal_yaml[1].as<double>();
             cell.normal[2] = normal_yaml[2].as<double>();
+#else
+            position_yaml[0] >> cell.position[0];
+            position_yaml[1] >> cell.position[1];
+            position_yaml[2] >> cell.position[2];
+            normal_yaml[0] >> cell.normal[0];
+            normal_yaml[1] >> cell.normal[1];
+            normal_yaml[2] >> cell.normal[2];
+#endif
 
             cell.normal.normalize();
             cells += cell;
