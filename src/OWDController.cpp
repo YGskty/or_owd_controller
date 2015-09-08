@@ -246,10 +246,7 @@ bool OWDController::ExecuteORTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj)
         return false;
     }
 
-    // TODO: We need to add a time_added field to avoid a race condition here.
-    //execution_time_ = response.time_added;
-    execution_time_ = ros::Time::now();
-
+    execution_time_ = response.time_added;
     status_cleared_ = false;
     return true;
 }
