@@ -316,9 +316,6 @@ bool OWDController::ExecuteORTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj)
     request.xml_id = traj->GetXMLId();
     request.options = parseTrajectoryFlagsJSON(traj);
 
-    // TODO: How do we know whether synchronization is required?
-    request.options = 0;
-
     owd_msgs::AddOrTrajectory::Response response;
     bool const success = srv_add_or_traj_.call(request, response) && response.ok;
     if (success) {
