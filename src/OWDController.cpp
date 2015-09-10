@@ -35,6 +35,90 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <boost/foreach.hpp>
 #include "OWDController.h"
+#include "picojson.h"
+
+namespace {
+
+template <class T>
+T from_json(picojson::value const &value);
+
+template <>
+bool from_json<bool>(picojson::value const &value)
+{
+    if (!value.is<bool>()) {
+        throw OpenRAVE::openrave_exception(
+            "Value is not a boolean.", OpenRAVE::ORE_InvalidArguments);
+    }
+    return value.get<bool>();
+}
+
+template <>
+double from_json<double>(picojson::value const &value)
+{
+    if (!value.is<double>()) {
+        throw OpenRAVE::openrave_exception(
+            "Value is not a double.", OpenRAVE::ORE_InvalidArguments);
+    }
+    return value.get<double>();
+}
+
+template <>
+std::vector<double> from_json<std::vector<double> >(picojson::value const &value)
+{
+    if (!value.is<picojson::value::array>()) {
+        throw OpenRAVE::openrave_exception(
+            "Value is not an array.", OpenRAVE::ORE_InvalidArguments);
+    }
+
+    picojson::value::array const &input_array
+        = value.get<picojson::value::array>();
+    std::vector<double> output_array(input_array.size());
+
+    for (size_t i = 0; i < input_array.size(); ++i) {
+        output_array[i] = from_json<double>(input_array[i]);
+    }
+
+    return output_array;
+}
+
+template <class T>
+T from_json_key(picojson::value const &value, std::string const &key)
+{
+    if (!value.is<picojson::value::object>()) {
+        throw OpenRAVE::openrave_exception(
+            "Value is not an object.", OpenRAVE::ORE_InvalidArguments);
+    }
+
+    picojson::value::object obj = value.get<picojson::value::object>();
+    picojson::value::object::iterator it = obj.find(key);
+    if (it == obj.end()) {
+        throw OPENRAVE_EXCEPTION_FORMAT(
+            "Object does not have key '%s'.", key.c_str(),
+            OpenRAVE::ORE_InvalidArguments);
+    }
+
+    return from_json<T>(it->second);
+}
+
+template <class T>
+T from_json_key(picojson::value const &value, std::string const &key,
+                T default_value)
+{
+    if (!value.is<picojson::value::object>()) {
+        throw OpenRAVE::openrave_exception(
+            "Value is not an object.", OpenRAVE::ORE_InvalidArguments);
+    }
+
+    picojson::value::object obj = value.get<picojson::value::object>();
+    picojson::value::object::iterator it = obj.find(key);
+    if (it != obj.end()) {
+        return from_json<T>(it->second);
+    } else {
+        return default_value;
+    }
+}
+
+}
 
 OWDController::OWDController(OpenRAVE::EnvironmentBasePtr env, std::string const &ns)
     : OpenRAVE::ControllerBase(env)
@@ -230,9 +314,7 @@ bool OWDController::ExecuteORTrajectory(OpenRAVE::TrajectoryBaseConstPtr traj)
     request.id = "";
     request.traj = ss.str();
     request.xml_id = traj->GetXMLId();
-
-    // TODO: How do we know whether synchronization is required?
-    request.options = 0;
+    request.options = parseTrajectoryFlagsJSON(traj);
 
     owd_msgs::AddOrTrajectory::Response response;
     bool const success = srv_add_or_traj_.call(request, response) && response.ok;
@@ -261,7 +343,7 @@ bool OWDController::ExecuteGenericTrajectory(OpenRAVE::TrajectoryBaseConstPtr tr
                    num_waypoints, num_dofs);
 
     owd_msgs::AddTrajectory::Request request;
-    request.traj.options = parseTrajectoryFlags(traj);
+    request.traj.options = parseTrajectoryFlagsJSON(traj);
     request.traj.id = "";
     request.traj.positions.resize(num_waypoints);
     request.traj.blend_radius.resize(num_waypoints);
@@ -666,6 +748,127 @@ bool OWDController::clearStatusCommand(std::ostream &out, std::istream &in)
 {
     status_cleared_ = true;
     return true;
+}
+
+int OWDController::parseTrajectoryFlagsJSON(
+    OpenRAVE::TrajectoryBaseConstPtr traj)
+{
+    using picojson::object;
+
+    std::string const description = traj->GetDescription();
+    if (description.empty()) {
+        RAVELOG_DEBUG("Trajectory has no description. Using default"
+                      " execution options.\n");
+        return 0;
+    }
+
+    picojson::value root;
+    std::string const json_error = picojson::parse(root, description); 
+    if (!json_error.empty()) {
+        RAVELOG_WARN(
+            "Failed parsing JSON from trajectory description: %s. Using"
+            " default execution options.\n",
+            json_error.c_str());
+        return 0;
+    }
+
+    if (!root.is<object>()) {
+        RAVELOG_WARN("Trajectory description is not a JSON dictionary."
+                     " Using default execution options.\n");
+        return 0;
+    }
+
+    object &root_object = root.get<object>();
+    object::iterator options_it = root_object.find("owd_options");
+    if (options_it == root_object.end()) {
+        RAVELOG_DEBUG("Trajectory description does not contain the '"
+                      "owd_options' key. Using default execution options.\n");
+        return 0;
+    }
+
+    // Parse the flags from JSON.
+    bool stop_on_stall, stop_on_ft;
+    double force_magnitude;
+    std::vector<double> force_direction, torque;
+
+    std::vector<double> default_force_direction(3), default_torque(3);
+    default_force_direction[2] = -1.;
+    default_torque[1] = 999.;
+
+    try {
+        // These default values are copied out of OWD.
+        picojson::value &options_value = options_it->second;
+        stop_on_stall = from_json_key<bool>(
+            options_value, "stop_on_stall", false);
+        stop_on_ft = from_json_key<bool>(
+            options_value, "stop_on_ft", false);
+        force_magnitude = from_json_key<double>(
+            options_value, "force_magnitude", 6.);
+        force_direction = from_json_key<std::vector<double> >(
+            options_value, "force_direction", default_force_direction);
+        torque = from_json_key<std::vector<double> >(
+            options_value, "torque", default_torque);
+    } catch (OpenRAVE::openrave_exception const &e) {
+        RAVELOG_WARN("Invalid 'owd_options'. Skipping execution.\n");
+        throw;
+    }
+
+    if (force_direction.size() != 3) {
+        RAVELOG_ERROR("Option 'force_direction' has incorrect length: expected"
+                      " 3, got %d.\n", force_direction.size());
+        throw OPENRAVE_EXCEPTION_FORMAT(
+            "Option 'force_direction' has incorrect length: expected 3, got %d.",
+            force_direction.size(), OpenRAVE::ORE_InvalidArguments);
+    }
+    if (torque.size() != 3) {
+        RAVELOG_ERROR("Option 'torque' has incorrect length: expected"
+                      " 3, got %d.\n", torque.size());
+        throw OPENRAVE_EXCEPTION_FORMAT(
+            "Option 'torque' has incorrect length: expected 3, got %d.",
+            torque.size(), OpenRAVE::ORE_InvalidArguments);
+    }
+
+    // Create the trajectory options bitmask.
+    RAVELOG_DEBUG("Found execution flags: stop_on_stall=%d, stop_on_ft=%d\n",
+                  stop_on_stall, stop_on_ft);
+
+    int flags = 0;
+    if (stop_on_stall) {
+        flags |= owd_msgs::JointTraj::opt_CancelOnStall;
+    }
+    if (stop_on_ft) {
+        flags |= owd_msgs::JointTraj::opt_CancelOnForceInput;
+    }
+
+    // Set the force/torque thresholds.
+    if (stop_on_ft) {
+        owd_msgs::SetForceInputThreshold msg;
+        msg.request.direction.x = force_direction[0];
+        msg.request.direction.y = force_direction[1];
+        msg.request.direction.z = force_direction[2];
+        msg.request.force = force_magnitude;
+        msg.request.torques.x = torque[0];
+        msg.request.torques.y = torque[1];
+        msg.request.torques.z = torque[2];
+
+        bool success = srv_force_threshold_.call(msg) && msg.response.ok;
+        if (!success && !msg.response.reason.empty()) {
+            RAVELOG_ERROR("Setting force/torque threshold failed with error: %s\n",
+                          msg.response.reason.c_str());
+            throw OpenRAVE::openrave_exception("Failed setting force/torque threshold in OWD.",
+                                               OpenRAVE::ORE_Failed);
+        } else if (!success) {
+            RAVELOG_ERROR("Setting force/torque threshold failed with an unknown error.\n");
+            throw OpenRAVE::openrave_exception("Failed setting force/torque threshold in OWD.",
+                                               OpenRAVE::ORE_Failed);
+        }
+        RAVELOG_DEBUG("Set thresholds: direction = [ %f %f %f ], magnitude = %f, torque = [ %f %f %f ]\n",
+                      msg.request.direction.x, msg.request.direction.y, msg.request.direction.z,
+                      msg.request.force,
+                      msg.request.torques.x, msg.request.torques.y, msg.request.torques.z);
+    }
+
+    return flags;
 }
 
 int OWDController::parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj)

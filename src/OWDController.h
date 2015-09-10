@@ -107,6 +107,7 @@ private:
     void wamstateCallback(owd_msgs::WAMState::ConstPtr const &wamstate);
 
     int parseTrajectoryFlags(OpenRAVE::TrajectoryBaseConstPtr traj);
+    int parseTrajectoryFlagsJSON(OpenRAVE::TrajectoryBaseConstPtr traj);
     
 };
 
